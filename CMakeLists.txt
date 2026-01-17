@@ -12,7 +12,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
 project(RV_Demo)
 
 # 使用标准库编译
-add_executable(hello src/main.c)
+add_executable(rv_demo src/main.c)
 
 # 移除 -nostdlib -nostartfiles，保留 -static (可选，如果想生成静态链接程序)
-target_link_options(hello PRIVATE -static)
+target_link_options(rv_demo PRIVATE -static)

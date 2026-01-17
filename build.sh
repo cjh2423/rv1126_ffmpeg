@@ -13,4 +13,4 @@ cmake ..
 # Build the project
 make
 
-echo "Build complete. Executable is located at build/hello"
+echo "Build complete. Executable is located at build/rv_demo"
