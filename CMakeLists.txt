@@ -41,9 +41,9 @@ include_directories(
 # 第三方库路径（预留，后续添加）
 # ============================================================
 # FFmpeg 库路径
-# set(FFMPEG_DIR ${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg)
-# include_directories(${FFMPEG_DIR}/include)
-# link_directories(${FFMPEG_DIR}/lib)
+set(FFMPEG_DIR ${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg_install)
+include_directories(${FFMPEG_DIR}/include)
+link_directories(${FFMPEG_DIR}/lib)
 
 # Rockchip MPP 库路径
 # set(MPP_DIR ${PROJECT_SOURCE_DIR}/3rdparty/mpp)
@@ -92,7 +92,7 @@ target_link_libraries(rv_demo pthread)
 target_link_libraries(rv_demo m)
 
 # FFmpeg 库（后续取消注释）
-# target_link_libraries(rv_demo avformat avcodec avutil swscale)
+target_link_libraries(rv_demo avformat avcodec avutil swscale swresample)
 
 # Rockchip MPP 库（后续取消注释）
 # target_link_libraries(rv_demo rockchip_mpp)
@@ -104,4 +104,4 @@ target_link_libraries(rv_demo m)
 # target_link_options(rv_demo PRIVATE -static)
 
 # 动态链接（推荐，减小可执行文件大小）
-target_link_options(rv_demo PRIVATE -Wl,-rpath-link,${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg/lib)
+target_link_options(rv_demo PRIVATE -Wl,-rpath-link,${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg_install/lib)
