@@ -35,6 +35,7 @@ int main() {
     
     // 配置采集参数
     VideoCaptureConfig cap_config = {
+        .type = app_cfg->capture.type, // 传递摄像头类型
         .dev_path = app_cfg->capture.dev_path,
         .width = app_cfg->capture.width,
         .height = app_cfg->capture.height,
@@ -43,8 +44,10 @@ int main() {
         .buffer_count = app_cfg->capture.buffer_count
     };
 
-    printf("Config: %s, %dx%d @ %d fps\n", 
-           cap_config.dev_path, cap_config.width, cap_config.height, cap_config.fps);
+    printf("Config: %s (%s), %dx%d @ %d fps\n", 
+           cap_config.dev_path, 
+           cap_config.type == VIDEO_TYPE_MIPI ? "MIPI" : "USB",
+           cap_config.width, cap_config.height, cap_config.fps);
 
     VideoCaptureContext* cap_ctx = video_capture_create(&cap_config);
     if (!cap_ctx) {

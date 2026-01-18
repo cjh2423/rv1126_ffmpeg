@@ -9,6 +9,14 @@ extern "C" {
 #endif
 
 /**
+ * @brief 摄像头类型枚举
+ */
+typedef enum {
+    VIDEO_TYPE_USB = 0, // USB UVC 摄像头
+    VIDEO_TYPE_MIPI     // MIPI CSI 摄像头 (通常经过 ISP)
+} VideoCaptureType;
+
+/**
  * @brief 视频像素格式枚举
  * 目前主要支持常用格式，后续可扩展
  */
@@ -38,6 +46,7 @@ typedef struct {
  * @brief 视频采集配置结构体
  */
 typedef struct {
+    VideoCaptureType type;      // 摄像头类型
     const char* dev_path;       // 设备路径，例如 "/dev/video0"
     int width;                  // 期望宽度
     int height;                 // 期望高度

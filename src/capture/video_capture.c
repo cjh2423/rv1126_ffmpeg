@@ -21,10 +21,10 @@ typedef struct {
     size_t length;
 } BufferInfo;
 
-struct VideoCaptureContext { 
+struct VideoCaptureContext {
+    VideoCaptureType type;
     char dev_path[64];
-    int fd;
-    
+    int fd;    
     int width;
     int height;
     VideoPixelFormat format;
@@ -71,6 +71,7 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
     VideoCaptureContext* ctx = (VideoCaptureContext*)calloc(1, sizeof(VideoCaptureContext));
     if (!ctx) return NULL;
 
+    ctx->type = config->type;
     strncpy(ctx->dev_path, config->dev_path, sizeof(ctx->dev_path) - 1);
     ctx->width = config->width;
     ctx->height = config->height;
@@ -78,6 +79,20 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
     ctx->fps = config->fps;
     ctx->buffer_count = config->buffer_count > 0 ? config->buffer_count : 4;
     ctx->fd = -1;
+
+    printf("[VideoCapture] Init: Type=%s, Device=%s\n", 
+           ctx->type == VIDEO_TYPE_MIPI ? "MIPI (ISP)" : "USB (UVC)", 
+           ctx->dev_path);
+
+    // 针对 MIPI 摄像头的特定检查
+    if (ctx->type == VIDEO_TYPE_MIPI) {
+        if (ctx->buffer_count < 4) {
+            fprintf(stderr, "[VideoCapture] Warning: MIPI cameras often require >= 4 buffers. Current: %d\n", ctx->buffer_count);
+        }
+        if (ctx->format != VIDEO_FMT_NV12) {
+            fprintf(stderr, "[VideoCapture] Warning: MIPI ISP works best with NV12. Current: %d\n", ctx->format);
+        }
+    }
 
     // 1. 打开设备
     ctx->fd = open(ctx->dev_path, O_RDWR | O_NONBLOCK, 0);
@@ -89,7 +104,6 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
 
     // 2. 检查设备能力
     struct v4l2_capability cap;
-    memset(&cap, 0, sizeof(cap));
     if (xioctl(ctx->fd, VIDIOC_QUERYCAP, &cap) == -1) { 
         perror("Querying capabilities");
         goto error;
@@ -98,6 +112,10 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
         fprintf(stderr, "%s is no video capture device\n", ctx->dev_path);
         goto error;
     }
+    // 很多现代 SOC 的 ISP 驱动（如 Rockchip）使用 V4L2_CAP_VIDEO_CAPTURE_MPLANE
+    // 如果上面的检查失败，可能需要检查 MPLANE。但在 RV1126 上，video0 节点通常兼容单平面 API。
+    // 如果后续遇到问题，这里需要增加对 MPLANE 的支持。
+
     if (!(cap.capabilities & V4L2_CAP_STREAMING)) { 
         fprintf(stderr, "%s does not support streaming i/o\n", ctx->dev_path);
         goto error;
@@ -110,7 +128,7 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
     fmt.fmt.pix.width = ctx->width;
     fmt.fmt.pix.height = ctx->height;
     fmt.fmt.pix.pixelformat = fmt_to_v4l2(ctx->format);
-    fmt.fmt.pix.field = V4L2_FIELD_ANY; // 也可以尝试 V4L2_FIELD_NONE
+    fmt.fmt.pix.field = V4L2_FIELD_ANY; 
 
     if (xioctl(ctx->fd, VIDIOC_S_FMT, &fmt) == -1) { 
         perror("Setting Pixel Format");
@@ -118,21 +136,21 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
     }
 
     // 更新实际协商的宽高
-    ctx->width = fmt.fmt.pix.width;
-    ctx->height = fmt.fmt.pix.height;
-    if (fmt.fmt.pix.pixelformat != fmt_to_v4l2(ctx->format)) { 
-        fprintf(stderr, "Warning: Requested pixel format not supported, driver selected different one.\n");
-        // 这里为了简单，暂不强行退出，但实际使用中可能需要处理
+    if (ctx->width != fmt.fmt.pix.width || ctx->height != fmt.fmt.pix.height) {
+        printf("[VideoCapture] Resolution adjusted by driver: %dx%d -> %dx%d\n", 
+               ctx->width, ctx->height, fmt.fmt.pix.width, fmt.fmt.pix.height);
+        ctx->width = fmt.fmt.pix.width;
+        ctx->height = fmt.fmt.pix.height;
     }
 
-    // 4. 设置帧率 (可选，部分驱动不支持会报错，这里仅打印警告)
+    // 4. 设置帧率
     struct v4l2_streamparm streamparm;
     memset(&streamparm, 0, sizeof(streamparm));
     streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     streamparm.parm.capture.timeperframe.numerator = 1;
     streamparm.parm.capture.timeperframe.denominator = ctx->fps;
     if (xioctl(ctx->fd, VIDIOC_S_PARM, &streamparm) == -1) { 
-        // perror("Setting FPS"); // 很多 USB 摄像头不支持此命令，忽略
+        // perror("Setting FPS");
     }
 
     // 5. 申请缓冲区 (MMAP)
@@ -176,10 +194,9 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
             goto error;
         }
     }
-    ctx->buffer_count = req.count; // 更新实际申请到的数量
+    ctx->buffer_count = req.count;
 
-    printf("Capture device init success: %s (%dx%d @ %d fps)\n", 
-           ctx->dev_path, ctx->width, ctx->height, ctx->fps);
+    printf("[VideoCapture] Init Success: %dx%d @ %d fps\n", ctx->width, ctx->height, ctx->fps);
 
     return ctx;
 

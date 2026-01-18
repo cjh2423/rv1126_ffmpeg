@@ -4,6 +4,7 @@
 // 使用宏定义进行初始化，方便统一管理
 static const AppConfig g_config = {
     .capture = {
+        .type = APP_CONFIG_CAPTURE_TYPE,
         .dev_path = APP_CONFIG_CAPTURE_DEV_PATH,
         .width = APP_CONFIG_CAPTURE_WIDTH,
         .height = APP_CONFIG_CAPTURE_HEIGHT,

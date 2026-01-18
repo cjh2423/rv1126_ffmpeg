@@ -8,14 +8,14 @@ extern "C" {
 #endif
 
 // ============================================================
-// 摄像头类型定义
+// 摄像头类型定义 (对应 VideoCaptureType)
 // ============================================================
 #define CAMERA_TYPE_USB  0
 #define CAMERA_TYPE_MIPI 1
 
 /**
  * @brief 当前摄像头类型选择
- * 修改此宏以切换摄像头类型
+ * 根据实际硬件修改此宏
  */
 #define APP_CONFIG_CAMERA_TYPE CAMERA_TYPE_MIPI
 
@@ -34,10 +34,12 @@ extern "C" {
     // MIPI (Rockchip ISP) 最佳实践
     #define APP_CONFIG_CAPTURE_DEV_PATH  "/dev/video0" // 通常是 rkisp_mainpath
     #define APP_CONFIG_CAPTURE_FMT       VIDEO_FMT_NV12 // ISP 硬件输出 NV12 效率最高
+    #define APP_CONFIG_CAPTURE_TYPE      VIDEO_TYPE_MIPI
 #else
     // USB (UVC) 最佳实践
     #define APP_CONFIG_CAPTURE_DEV_PATH  "/dev/video10" // 具体取决于插入顺序
     #define APP_CONFIG_CAPTURE_FMT       VIDEO_FMT_YUYV // 大多数 USB 摄像头支持 YUYV 或 MJPEG
+    #define APP_CONFIG_CAPTURE_TYPE      VIDEO_TYPE_USB
 #endif
 
 // 视频编码参数
@@ -55,6 +57,7 @@ extern "C" {
 typedef struct {
     // 视频采集模块配置
     struct {
+        VideoCaptureType type;
         const char* dev_path;
         int width;
         int height;
