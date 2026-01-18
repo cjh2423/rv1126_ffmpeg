@@ -1,5 +1,6 @@
 build/
 3rdparty/
+!3rdparty/*.sh
 *.o
 *.a
 *.so
