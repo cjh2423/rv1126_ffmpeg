@@ -13,6 +13,11 @@
 #include <linux/videodev2.h>
 
 // ============================================================ 
+// 常量定义
+// ============================================================ 
+#define VIDEO_MAX_PLANES 8  // V4L2 最大平面数
+
+// ============================================================ 
 // 内部数据结构定义
 // ============================================================ 
 
@@ -33,6 +38,7 @@ struct VideoCaptureContext {
     BufferInfo* buffers;
     int buffer_count;
     int is_streaming;
+    int use_mplane;  // 1 if using multi-plane API, 0 for single-plane
 
     OnFrameCallback callback;
     void* user_data;
@@ -108,13 +114,18 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
         perror("Querying capabilities");
         goto error;
     }
-    if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) { 
-        fprintf(stderr, "%s is no video capture device\n", ctx->dev_path);
+    
+    // 检查是否支持 multi-plane API (Rockchip ISP 使用此模式)
+    if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) {
+        ctx->use_mplane = 1;
+        printf("[VideoCapture] Using multi-plane API\n");
+    } else if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) {
+        ctx->use_mplane = 0;
+        printf("[VideoCapture] Using single-plane API\n");
+    } else {
+        fprintf(stderr, "%s is not a video capture device\n", ctx->dev_path);
         goto error;
     }
-    // 很多现代 SOC 的 ISP 驱动（如 Rockchip）使用 V4L2_CAP_VIDEO_CAPTURE_MPLANE
-    // 如果上面的检查失败，可能需要检查 MPLANE。但在 RV1126 上，video0 节点通常兼容单平面 API。
-    // 如果后续遇到问题，这里需要增加对 MPLANE 的支持。
 
     if (!(cap.capabilities & V4L2_CAP_STREAMING)) { 
         fprintf(stderr, "%s does not support streaming i/o\n", ctx->dev_path);
@@ -124,11 +135,20 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
     // 3. 设置格式
     struct v4l2_format fmt;
     memset(&fmt, 0, sizeof(fmt));
-    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    fmt.fmt.pix.width = ctx->width;
-    fmt.fmt.pix.height = ctx->height;
-    fmt.fmt.pix.pixelformat = fmt_to_v4l2(ctx->format);
-    fmt.fmt.pix.field = V4L2_FIELD_ANY; 
+    
+    if (ctx->use_mplane) {
+        fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+        fmt.fmt.pix_mp.width = ctx->width;
+        fmt.fmt.pix_mp.height = ctx->height;
+        fmt.fmt.pix_mp.pixelformat = fmt_to_v4l2(ctx->format);
+        fmt.fmt.pix_mp.field = V4L2_FIELD_ANY;
+    } else {
+        fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        fmt.fmt.pix.width = ctx->width;
+        fmt.fmt.pix.height = ctx->height;
+        fmt.fmt.pix.pixelformat = fmt_to_v4l2(ctx->format);
+        fmt.fmt.pix.field = V4L2_FIELD_ANY;
+    }
 
     if (xioctl(ctx->fd, VIDIOC_S_FMT, &fmt) == -1) { 
         perror("Setting Pixel Format");
@@ -136,17 +156,26 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
     }
 
     // 更新实际协商的宽高
-    if (ctx->width != fmt.fmt.pix.width || ctx->height != fmt.fmt.pix.height) {
+    int actual_width, actual_height;
+    if (ctx->use_mplane) {
+        actual_width = fmt.fmt.pix_mp.width;
+        actual_height = fmt.fmt.pix_mp.height;
+    } else {
+        actual_width = fmt.fmt.pix.width;
+        actual_height = fmt.fmt.pix.height;
+    }
+    
+    if (ctx->width != actual_width || ctx->height != actual_height) {
         printf("[VideoCapture] Resolution adjusted by driver: %dx%d -> %dx%d\n", 
-               ctx->width, ctx->height, fmt.fmt.pix.width, fmt.fmt.pix.height);
-        ctx->width = fmt.fmt.pix.width;
-        ctx->height = fmt.fmt.pix.height;
+               ctx->width, ctx->height, actual_width, actual_height);
+        ctx->width = actual_width;
+        ctx->height = actual_height;
     }
 
     // 4. 设置帧率
     struct v4l2_streamparm streamparm;
     memset(&streamparm, 0, sizeof(streamparm));
-    streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    streamparm.type = ctx->use_mplane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
     streamparm.parm.capture.timeperframe.numerator = 1;
     streamparm.parm.capture.timeperframe.denominator = ctx->fps;
     if (xioctl(ctx->fd, VIDIOC_S_PARM, &streamparm) == -1) { 
@@ -157,7 +186,7 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
     struct v4l2_requestbuffers req;
     memset(&req, 0, sizeof(req));
     req.count = ctx->buffer_count;
-    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req.type = ctx->use_mplane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_MMAP;
 
     if (xioctl(ctx->fd, VIDIOC_REQBUFS, &req) == -1) { 
@@ -174,20 +203,38 @@ VideoCaptureContext* video_capture_create(const VideoCaptureConfig* config) {
 
     for (size_t i = 0; i < req.count; ++i) { 
         struct v4l2_buffer buf;
+        struct v4l2_plane planes[VIDEO_MAX_PLANES];  // 支持多平面
+        
         memset(&buf, 0, sizeof(buf));
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        memset(planes, 0, sizeof(planes));
+        
+        buf.type = ctx->use_mplane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
+        
+        if (ctx->use_mplane) {
+            buf.m.planes = planes;
+            buf.length = VIDEO_MAX_PLANES;
+        }
 
         if (xioctl(ctx->fd, VIDIOC_QUERYBUF, &buf) == -1) { 
             perror("Querying Buffer");
             goto error;
         }
 
-        ctx->buffers[i].length = buf.length;
-        ctx->buffers[i].start = mmap(NULL, buf.length, 
+        if (ctx->use_mplane) {
+            // Multi-plane: 只映射第一个平面（对于 NV12，Y 和 UV 在同一个平面）
+            ctx->buffers[i].length = buf.m.planes[0].length;
+            ctx->buffers[i].start = mmap(NULL, buf.m.planes[0].length, 
+                                     PROT_READ | PROT_WRITE, MAP_SHARED, 
+                                     ctx->fd, buf.m.planes[0].m.mem_offset);
+        } else {
+            // Single-plane
+            ctx->buffers[i].length = buf.length;
+            ctx->buffers[i].start = mmap(NULL, buf.length, 
                                      PROT_READ | PROT_WRITE, MAP_SHARED, 
                                      ctx->fd, buf.m.offset);
+        }
 
         if (ctx->buffers[i].start == MAP_FAILED) { 
             perror("mmap");
@@ -238,10 +285,19 @@ int video_capture_start(VideoCaptureContext* ctx) {
 
     for (int i = 0; i < ctx->buffer_count; ++i) { 
         struct v4l2_buffer buf;
+        struct v4l2_plane planes[VIDEO_MAX_PLANES];
+        
         memset(&buf, 0, sizeof(buf));
-        buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        memset(planes, 0, sizeof(planes));
+        
+        buf.type = ctx->use_mplane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
         buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
+        
+        if (ctx->use_mplane) {
+            buf.m.planes = planes;
+            buf.length = VIDEO_MAX_PLANES;
+        }
 
         if (xioctl(ctx->fd, VIDIOC_QBUF, &buf) == -1) { 
             perror("Queue Buffer");
@@ -249,7 +305,7 @@ int video_capture_start(VideoCaptureContext* ctx) {
         }
     }
 
-    enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    enum v4l2_buf_type type = ctx->use_mplane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (xioctl(ctx->fd, VIDIOC_STREAMON, &type) == -1) { 
         perror("Stream On");
         return -1;
@@ -262,7 +318,7 @@ int video_capture_start(VideoCaptureContext* ctx) {
 int video_capture_stop(VideoCaptureContext* ctx) { 
     if (!ctx || !ctx->is_streaming) return 0;
 
-    enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    enum v4l2_buf_type type = ctx->use_mplane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (xioctl(ctx->fd, VIDIOC_STREAMOFF, &type) == -1) { 
         perror("Stream Off");
         return -1;
@@ -298,9 +354,18 @@ int video_capture_process(VideoCaptureContext* ctx) {
     }
 
     struct v4l2_buffer buf;
+    struct v4l2_plane planes[VIDEO_MAX_PLANES];
+    
     memset(&buf, 0, sizeof(buf));
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    memset(planes, 0, sizeof(planes));
+    
+    buf.type = ctx->use_mplane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
+    
+    if (ctx->use_mplane) {
+        buf.m.planes = planes;
+        buf.length = VIDEO_MAX_PLANES;
+    }
 
     if (xioctl(ctx->fd, VIDIOC_DQBUF, &buf) == -1) { 
         if (errno == EAGAIN) return 0;
@@ -312,7 +377,7 @@ int video_capture_process(VideoCaptureContext* ctx) {
     if (ctx->callback) { 
         VideoFrame frame;
         frame.start = ctx->buffers[buf.index].start;
-        frame.length = buf.bytesused; // 实际使用的数据量
+        frame.length = ctx->use_mplane ? buf.m.planes[0].bytesused : buf.bytesused; // 实际使用的数据量
         frame.index = buf.index;
         frame.timestamp = buf.timestamp.tv_sec * 1000000 + buf.timestamp.tv_usec;
         frame.format = ctx->format;

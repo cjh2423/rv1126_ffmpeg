@@ -32,7 +32,7 @@ extern "C" {
 // 根据摄像头类型自动配置默认参数
 #if APP_CONFIG_CAMERA_TYPE == CAMERA_TYPE_MIPI
     // MIPI (Rockchip ISP) 最佳实践
-    #define APP_CONFIG_CAPTURE_DEV_PATH  "/dev/video0" // 通常是 rkisp_mainpath
+    #define APP_CONFIG_CAPTURE_DEV_PATH  "/dev/video1" // 改为 rkisp_selfpath (当前启用的链路)
     #define APP_CONFIG_CAPTURE_FMT       VIDEO_FMT_NV12 // ISP 硬件输出 NV12 效率最高
     #define APP_CONFIG_CAPTURE_TYPE      VIDEO_TYPE_MIPI
 #else
