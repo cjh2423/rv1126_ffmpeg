@@ -40,7 +40,8 @@ USB 摄像头通常被称为 UVC (USB Video Class) 设备。
 ## 4. 在 RV1126 上的开发差异
 
 ### V4L2 节点
-*   **MIPI**: 通常对应 `/dev/video0` (rkisp_mainpath)。因为它经过 ISP，所以会有多个节点（selfpath, bypass 等）。
+*   **MIPI**: 通常对应 `/dev/video0` (rkisp_mainpath) 或 `/dev/video1` (rkisp_selfpath)。
+    *   **注意**: 这是一个复杂的 Media Controller 设备。默认情况下，某些固件可能只启用了 selfpath (`/dev/video1`)。如果 `/dev/video0` 报错 "Operation not permitted"，请检查 media link 状态。
 *   **USB**: 通常对应 `/dev/video10` 或更高。
 
 ### 像素格式

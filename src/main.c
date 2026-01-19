@@ -12,7 +12,19 @@ void on_frame_captured(VideoCaptureContext* ctx, VideoFrame* frame, void* user_d
     static int frame_count = 0;
     frame_count++;
     
-    // 每 30 帧打印一次日志，避免刷屏
+    // 4. 保存第 60 帧用于测试 (避开前几帧可能的不稳定)
+    if (frame_count == 60) {
+        FILE* fp = fopen("test_frame_1920x1080.nv12", "wb");
+        if (fp) {
+            fwrite(frame->start, 1, frame->length, fp);
+            fclose(fp);
+            printf("[Capture] Saved frame %d to 'test_frame_1920x1080.nv12' (%zu bytes)\n", frame_count, frame->length);
+        } else {
+            perror("Failed to save debug frame");
+        }
+    }
+
+    // 每 30 帧打印一次日志
     if (frame_count % 30 == 0) {
         printf("[Capture] Frame %d: %dx%d, Format: %d, Size: %zu bytes, TS: %llu us\n", 
                frame_count, frame->width, frame->height, frame->format, 
