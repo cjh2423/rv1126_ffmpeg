@@ -1,0 +1,1 @@
+/home/u22/sdk/rv1126_ipc_linux_release/project/app/rkipc/rkipc/common/isp/rv1126

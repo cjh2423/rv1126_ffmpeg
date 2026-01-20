@@ -2,7 +2,10 @@
 #include <string.h>
 #include <unistd.h>
 #include "capture/video_capture.h"
-#include "common/config.h"
+#include "config.h"
+#include "common.h"
+#include "param.h"
+#include "isp.h" // Rockchip ISP 接口
 
 // 声明 streamer 中的测试函数
 void streamer_init_test();
@@ -33,6 +36,14 @@ void on_frame_captured(VideoCaptureContext* ctx, VideoFrame* frame, void* user_d
 }
 
 int main() {
+    // 打印版本信息
+    rkipc_version_dump();
+    
+    // 初始化参数管理模块 (默认路径 /userdata/rkipc.ini)
+    if (rk_param_init(NULL) < 0) {
+        printf("[Param] Warning: Failed to init param system, using defaults.\n");
+    }
+
     puts("Hello World from C Language!");
     puts("This runs on RV1126 with standard libraries.");
     
@@ -60,6 +71,33 @@ int main() {
            cap_config.dev_path, 
            cap_config.type == VIDEO_TYPE_MIPI ? "MIPI" : "USB",
            cap_config.width, cap_config.height, cap_config.fps);
+
+    // ==========================================
+    // ISP 初始化 (针对 MIPI 摄像头)
+    // ==========================================
+    if (cap_config.type == VIDEO_TYPE_MIPI) {
+        printf("[ISP] Initializing ISP for Cam 0...\n");
+        // 初始化 ISP，使用默认 IQ 文件路径 /etc/iqfiles
+        if (rk_isp_init(0, NULL) < 0) {
+            fprintf(stderr, "[ISP] Failed to init ISP! Ensure /etc/iqfiles exists.\n");
+        } else {
+            printf("[ISP] Init success. Configuring Exposure...\n");
+            
+            // 1. 设置自动曝光 (Auto Exposure)
+            rk_isp_set_exposure_mode(0, "auto");
+            rk_isp_set_gain_mode(0, "auto");
+            
+            // 2. 提高亮度和对比度 (解决太暗的问题)
+            // 默认值通常为 50，设置为 60-70 可以显著提亮
+            rk_isp_set_brightness(0, 70); 
+            rk_isp_set_contrast(0, 60);
+            
+            // 3. (可选) 开启暗区增强
+            // rk_isp_set_dark_boost_level(0, 10);
+            
+            printf("[ISP] Settings applied: Brightness=70, Contrast=60, AE=Auto\n");
+        }
+    }
 
     VideoCaptureContext* cap_ctx = video_capture_create(&cap_config);
     if (!cap_ctx) {
@@ -91,6 +129,12 @@ int main() {
     video_capture_stop(cap_ctx);
     video_capture_destroy(cap_ctx);
     
+    if (cap_config.type == VIDEO_TYPE_MIPI) {
+        printf("[ISP] Deinit...\n");
+        rk_isp_deinit(0);
+    }
+    
+    rk_param_deinit();
     printf("Test finished.\n");
     
     return 0;

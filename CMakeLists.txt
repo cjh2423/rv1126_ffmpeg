@@ -32,6 +32,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/include/common
+    ${PROJECT_SOURCE_DIR}/include/common/isp
+    ${PROJECT_SOURCE_DIR}/include/common/param
+    ${PROJECT_SOURCE_DIR}/include/common/sysutil
     ${PROJECT_SOURCE_DIR}/include/capture
     ${PROJECT_SOURCE_DIR}/include/encoder
     ${PROJECT_SOURCE_DIR}/include/streamer
@@ -45,10 +48,20 @@ set(FFMPEG_DIR ${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg_install)
 include_directories(${FFMPEG_DIR}/include)
 link_directories(${FFMPEG_DIR}/lib)
 
-# Rockchip MPP 库路径
-# set(MPP_DIR ${PROJECT_SOURCE_DIR}/3rdparty/mpp)
-# include_directories(${MPP_DIR}/include)
-# link_directories(${MPP_DIR}/lib)
+# media库路径
+set(MEDIA_DIR ${PROJECT_SOURCE_DIR}/3rdparty/media)
+include_directories(
+    ${MEDIA_DIR}/include
+    ${MEDIA_DIR}/include/rkaiq
+    ${MEDIA_DIR}/include/rkaiq/uAPI
+    ${MEDIA_DIR}/include/rkaiq/common
+    ${MEDIA_DIR}/include/rkaiq/xcore
+    ${MEDIA_DIR}/include/rkaiq/algos
+    ${MEDIA_DIR}/include/rkaiq/iq_parser
+    ${MEDIA_DIR}/include/rkaiq/ipc_server
+    ${MEDIA_DIR}/include/libdrm
+)
+link_directories(${MEDIA_DIR}/lib)
 
 # ============================================================
 # 源文件收集
@@ -56,8 +69,14 @@ link_directories(${FFMPEG_DIR}/lib)
 # 主程序
 set(MAIN_SRC src/main.c)
 
-# 公共模块（日志、队列等工具）
+# 应用配置
+set(APP_SRC src/config.c)
+
+# 官方公共模块 (包含 param, isp, sysutil)
 file(GLOB COMMON_SRC src/common/*.c)
+file(GLOB PARAM_SRC src/common/param/*.c)
+file(GLOB ISP_SRC src/common/isp/*.c)
+file(GLOB SYSUTIL_SRC src/common/sysutil/*.c)
 
 # 视频采集模块
 file(GLOB CAPTURE_SRC src/capture/*.c)
@@ -71,7 +90,11 @@ file(GLOB STREAMER_SRC src/streamer/*.c)
 # 汇总所有源文件
 set(ALL_SOURCES
     ${MAIN_SRC}
+    ${APP_SRC}
     ${COMMON_SRC}
+    ${PARAM_SRC}
+    ${ISP_SRC}
+    ${SYSUTIL_SRC}
     ${CAPTURE_SRC}
     ${ENCODER_SRC}
     ${STREAMER_SRC}
@@ -94,8 +117,8 @@ target_link_libraries(rv_demo m)
 # FFmpeg 库（后续取消注释）
 target_link_libraries(rv_demo avformat avcodec avutil swscale swresample)
 
-# Rockchip MPP 库（后续取消注释）
-# target_link_libraries(rv_demo rockchip_mpp)
+# Rockchip 媒体库
+target_link_libraries(rv_demo rkaiq rockchip_mpp rga drm rksysutils)
 
 # ============================================================
 # 链接选项
@@ -104,4 +127,4 @@ target_link_libraries(rv_demo avformat avcodec avutil swscale swresample)
 # target_link_options(rv_demo PRIVATE -static)
 
 # 动态链接（推荐，减小可执行文件大小）
-target_link_options(rv_demo PRIVATE -Wl,-rpath-link,${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg_install/lib)
+target_link_options(rv_demo PRIVATE -Wl,-rpath-link,${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg_install/lib:${MEDIA_DIR}/lib)

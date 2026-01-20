@@ -1,6 +1,15 @@
-#include "common/config.h"
+#include "config.h"
+#include <stdio.h>
 
-// 静态全局配置实例
+// Global variables for official Rockchip log.h
+int enable_minilog = 0;
+int rkipc_log_level = 2; // LOG_LEVEL_INFO
+
+// Weak stubs for RKMedia MPI functions (if not provided by libraries)
+int __attribute__((weak)) RK_MPI_VI_PauseChn(int pipeId, int chnId) { return 0; }
+int __attribute__((weak)) RK_MPI_VI_ResumeChn(int pipeId, int chnId) { return 0; }
+ 
+ // 静态全局配置实例
 // 使用宏定义进行初始化，方便统一管理
 static const AppConfig g_config = {
     .capture = {
