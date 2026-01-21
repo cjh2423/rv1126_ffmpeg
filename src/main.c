@@ -1,11 +1,29 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
+#include <pthread.h>
 #include "capture/video_capture.h"
 #include "config.h"
 #include "common.h"
 #include "param.h"
 #include "isp.h" // Rockchip ISP 接口
+
+// 是否启用 ISP（1: 启用, 0: 关闭）
+#define USE_ISP 0
+
+static volatile sig_atomic_t g_stop = 0;        // 全局停止标志
+static int g_capture_ret = 0;                   // 采集线程返回值
+// 信号处理函数
+static void handle_signal(int signo) {
+    (void)signo;
+    g_stop = 1;
+}
+// 采集线程参数结构体
+typedef struct {
+    VideoCaptureContext* cap_ctx;       // 采集上下文
+    int max_frames;                     // 最大采集帧数
+} CaptureThreadArgs;
 
 // 声明 streamer 中的测试函数
 void streamer_init_test();
@@ -35,7 +53,28 @@ void on_frame_captured(VideoCaptureContext* ctx, VideoFrame* frame, void* user_d
     }
 }
 
+static void* capture_thread(void* arg) {
+    CaptureThreadArgs* args = (CaptureThreadArgs*)arg;
+
+    for (int i = 0; i < args->max_frames && !g_stop; ++i) {
+        if (video_capture_process(args->cap_ctx) < 0) {
+            fprintf(stderr, "Error during capture process.\n");
+            g_capture_ret = -1;
+            g_stop = 1;
+            break;
+        }
+    }
+
+    return NULL;
+}
+
 int main() {
+    int ret = 0;
+    int isp_inited = 0;
+    VideoCaptureContext* cap_ctx = NULL;
+    pthread_t cap_thread;
+    CaptureThreadArgs cap_args = {0};
+
     // 打印版本信息
     rkipc_version_dump();
     
@@ -44,11 +83,11 @@ int main() {
         printf("[Param] Warning: Failed to init param system, using defaults.\n");
     }
 
-    puts("Hello World from C Language!");
-    puts("This runs on RV1126 with standard libraries.");
+    //puts("Hello World from C Language!");
+    //puts("This runs on RV1126 with standard libraries.");
     
     // 1. 测试 FFmpeg 集成
-    streamer_init_test();
+    //streamer_init_test();
     
     // 2. 测试视频采集
     printf("\n=== Starting Video Capture Test ===\n");
@@ -75,12 +114,14 @@ int main() {
     // ==========================================
     // ISP 初始化 (针对 MIPI 摄像头)
     // ==========================================
+    #if USE_ISP
     if (cap_config.type == VIDEO_TYPE_MIPI) {
         printf("[ISP] Initializing ISP for Cam 0...\n");
         // 初始化 ISP，使用默认 IQ 文件路径 /etc/iqfiles
         if (rk_isp_init(0, NULL) < 0) {
             fprintf(stderr, "[ISP] Failed to init ISP! Ensure /etc/iqfiles exists.\n");
         } else {
+            isp_inited = 1;
             printf("[ISP] Init success. Configuring Exposure...\n");
             
             // 1. 设置自动曝光 (Auto Exposure)
@@ -98,11 +139,13 @@ int main() {
             printf("[ISP] Settings applied: Brightness=70, Contrast=60, AE=Auto\n");
         }
     }
+    #endif
 
-    VideoCaptureContext* cap_ctx = video_capture_create(&cap_config);
+    cap_ctx = video_capture_create(&cap_config);
     if (!cap_ctx) {
         fprintf(stderr, "Failed to create capture context.\n");
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     // 设置回调
@@ -111,31 +154,48 @@ int main() {
     // 开始采集
     if (video_capture_start(cap_ctx) < 0) {
         fprintf(stderr, "Failed to start capture.\n");
-        video_capture_destroy(cap_ctx);
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
+
+    // Install signal handlers so Ctrl+C triggers a clean shutdown.
+    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
 
     printf("Capture started, running for approx 150 frames...\n");
 
-    // 模拟主循环
-    for (int i = 0; i < 150; ++i) {
-        if (video_capture_process(cap_ctx) < 0) {
-            fprintf(stderr, "Error during capture process.\n");
-            break;
-        }
+    cap_args.cap_ctx = cap_ctx;
+    cap_args.max_frames = 150;
+    g_capture_ret = 0;
+
+    if (pthread_create(&cap_thread, NULL, capture_thread, &cap_args) != 0) {
+        fprintf(stderr, "Failed to create capture thread.\n");
+        ret = -1;
+        goto cleanup;
+    }
+
+    // Wait for capture loop to finish before releasing resources.
+    pthread_join(cap_thread, NULL);
+    if (g_capture_ret < 0) {
+        ret = -1;
     }
 
     printf("Stopping capture...\n");
-    video_capture_stop(cap_ctx);
-    video_capture_destroy(cap_ctx);
-    
-    if (cap_config.type == VIDEO_TYPE_MIPI) {
+cleanup:
+    if (cap_ctx) {
+        video_capture_stop(cap_ctx);
+        video_capture_destroy(cap_ctx);
+    }
+
+    #if USE_ISP
+    if (isp_inited) {
         printf("[ISP] Deinit...\n");
         rk_isp_deinit(0);
     }
-    
+    #endif
+
     rk_param_deinit();
     printf("Test finished.\n");
-    
-    return 0;
+
+    return ret;
 }
