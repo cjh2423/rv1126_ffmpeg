@@ -1,0 +1,8 @@
+烧录
+adb shell 界面或串口界面键入”reboot loader”点击回车键进入Loader/Maskrom模式
+
+
+下面是可能与项目有关的开发板中的配置文件
+rkipc.ini：在开发板的路径是 /userdata/
+rkipc-gc2053.ini：在开发板的路径是 /oem/usr/share/
+

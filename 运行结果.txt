@@ -1,0 +1,99 @@
+# 把执行上述命令后的输出按顺序粘贴在这里。
+# 我会根据内容继续分析。
+[root@Rockchip/userdata/demo] cd /oem/usr/share/iqfiles
+[root@Rockchip/oem/usr/share/iqfiles] ln -sf gc2053_YT-RV1109-2-V1_40IR-2MP-F20.
+xml "m00_f_gc2053 1-0037.xml"
+[root@Rockchip/oem/usr/share/iqfiles] ln -sf gc2053_YT-RV1109-2-V1_40IR-2MP-F20.
+xml m00_f_gc2053.xml
+[root@Rockchip/oem/usr/share/iqfiles] ls -l | grep -i gc2053
+lrwxrwxrwx    1 root     root            38 m00_f_gc2053 1-0037.xml -> gc2053_YT-RV1109-2-V1_40IR-2MP-F20.xml
+-rwxrwxr-x    1 1000     1000       2236639 gc2053_YT-RV1109-2-V1_40IR-2MP-F20.xml
+lrwxrwxrwx    1 root     root            38 m00_f_gc2053.xml -> gc2053_YT-RV1109-2-V1_40IR-2MP-F20.xml
+[root@Rockchip/oem/usr/share/iqfiles] v4l2-ctl -d /dev/video1 --set-fmt-video=wi
+dth=1920,height=1080,pixelformat=NV12 --stream-mmap --stream-count=1 --stream-to
+=/tmp/out.nv12 --stream-poll
+select timeout
+[root@Rockchip/oem/usr/share/iqfiles] ls -l /tmp/out.nv12
+-rw-r--r--    1 root     root             0 /tmp/out.nv12
+[root@Rockchip/oem/usr/share/iqfiles] dmesg | tail -n 80
+[ 5109.574693] rkisp rkisp-vir0: can not get first iq setting in stream on
+[ 5109.576083] rockchip-mipi-dphy-rx ff4b0000.csi-dphy: stream on:1
+[ 5109.576119] rockchip-mipi-dphy-rx: data_rate_mbps 594
+[ 5187.120196] rkisp0: rkisp_stream_stop id:1 timeout
+[ 5187.121084] rockchip-mipi-dphy-rx ff4b0000.csi-dphy: stream on:0
+[ 5483.663816] clk_mipicsi_out2io_fracdiv p_rate(297000000) is low than rate(24000000)*20, use integer or half-div
+[ 5484.068841] clk_mipicsi_out2io_fracdiv p_rate(297000000) is low than rate(24000000)*20, use integer or half-div
+[ 5484.128548] gpio gpiochip2: Persistence not supported for GPIO 7
+[ 5484.129269] gpio gpiochip2: Persistence not supported for GPIO 6
+[ 5484.242956] rkisp0: check video link or isp input
+[ 5514.533429] clk_mipicsi_out2io_fracdiv p_rate(297000000) is low than rate(24000000)*20, use integer or half-div
+[ 5514.941925] clk_mipicsi_out2io_fracdiv p_rate(297000000) is low than rate(24000000)*20, use integer or half-div
+[ 5514.992706] gpio gpiochip2: Persistence not supported for GPIO 7
+[ 5514.993102] gpio gpiochip2: Persistence not supported for GPIO 6
+[ 5515.108521] rockchip-mipi-dphy-rx ff4b0000.csi-dphy: stream on:1
+[ 5515.108561] rockchip-mipi-dphy-rx: data_rate_mbps 594
+[ 5515.579718] rkisp0: tx stream:4 lose frame:8, isp state:0x100 frame:4
+[ 5515.613076] rkisp0: tx stream:4 lose frame:9, isp state:0x100 frame:4
+[ 5515.646410] rkisp0: tx stream:4 lose frame:10, isp state:0x100 frame:4
+[ 5515.679719] rkisp0: tx stream:4 lose frame:11, isp state:0x100 frame:4
+[ 5515.713052] rkisp0: tx stream:4 lose frame:12, isp state:0x100 frame:4
+[ 5515.746385] rkisp0: tx stream:4 lose frame:13, isp state:0x100 frame:4
+[ 5515.779718] rkisp0: tx stream:4 lose frame:14, isp state:0x100 frame:4
+[ 5515.813065] rkisp0: tx stream:4 lose frame:15, isp state:0x100 frame:4
+[ 5515.846398] rkisp0: tx stream:4 lose frame:16, isp state:0x100 frame:4
+[ 5515.879732] rkisp0: tx stream:4 lose frame:17, isp state:0x100 frame:4
+[ 5515.913065] rkisp0: tx stream:4 lose frame:18, isp state:0x100 frame:4
+[ 5515.946398] rkisp0: tx stream:4 lose frame:19, isp state:0x100 frame:4
+[ 5515.979731] rkisp0: tx stream:4 lose frame:20, isp state:0x100 frame:4
+[ 5516.013064] rkisp0: tx stream:4 lose frame:21, isp state:0x100 frame:4
+[ 5516.046398] rkisp0: tx stream:4 lose frame:22, isp state:0x100 frame:4
+[ 5516.079718] rkisp0: tx stream:4 lose frame:23, isp state:0x100 frame:4
+[ 5516.113065] rkisp0: tx stream:4 lose frame:24, isp state:0x100 frame:4
+[ 5516.146398] rkisp0: tx stream:4 lose frame:25, isp state:0x100 frame:4
+[ 5516.179732] rkisp0: tx stream:4 lose frame:26, isp state:0x100 frame:4
+[ 5516.213065] rkisp0: tx stream:4 lose frame:27, isp state:0x100 frame:4
+[ 5516.246399] rkisp0: tx stream:4 lose frame:28, isp state:0x100 frame:4
+[ 5516.279732] rkisp0: tx stream:4 lose frame:29, isp state:0x100 frame:4
+[ 5516.313065] rkisp0: tx stream:4 lose frame:30, isp state:0x100 frame:4
+[ 5516.346398] rkisp0: tx stream:4 lose frame:31, isp state:0x100 frame:4
+[ 5516.379731] rkisp0: tx stream:4 lose frame:32, isp state:0x100 frame:4
+[ 5516.413052] rkisp0: tx stream:4 lose frame:33, isp state:0x100 frame:4
+[ 5516.446385] rkisp0: tx stream:4 lose frame:34, isp state:0x100 frame:4
+[ 5516.479718] rkisp0: tx stream:4 lose frame:35, isp state:0x100 frame:4
+[ 5516.512975] rkisp0: tx stream:4 lose frame:36, isp state:0x100 frame:4
+[ 5516.546385] rkisp0: tx stream:4 lose frame:37, isp state:0x100 frame:4
+[ 5516.579718] rkisp0: tx stream:4 lose frame:38, isp state:0x100 frame:4
+[ 5516.613052] rkisp0: tx stream:4 lose frame:39, isp state:0x100 frame:4
+[ 5516.646398] rkisp0: tx stream:4 lose frame:40, isp state:0x100 frame:4
+[ 5516.679731] rkisp0: tx stream:4 lose frame:41, isp state:0x100 frame:4
+[ 5516.713052] rkisp0: tx stream:4 lose frame:42, isp state:0x100 frame:4
+[ 5516.746398] rkisp0: tx stream:4 lose frame:43, isp state:0x100 frame:4
+[ 5516.779732] rkisp0: tx stream:4 lose frame:44, isp state:0x100 frame:4
+[ 5516.813066] rkisp0: tx stream:4 lose frame:45, isp state:0x100 frame:4
+[ 5516.846399] rkisp0: tx stream:4 lose frame:46, isp state:0x100 frame:4
+[ 5516.879732] rkisp0: tx stream:4 lose frame:47, isp state:0x100 frame:4
+[ 5516.913052] rkisp0: tx stream:4 lose frame:48, isp state:0x100 frame:4
+[ 5516.946385] rkisp0: tx stream:4 lose frame:49, isp state:0x100 frame:4
+[ 5516.979718] rkisp0: tx stream:4 lose frame:50, isp state:0x100 frame:4
+[ 5517.013077] rkisp0: tx stream:4 lose frame:51, isp state:0x100 frame:4
+[ 5517.046385] rkisp0: tx stream:4 lose frame:52, isp state:0x100 frame:4
+[ 5517.079718] rkisp0: tx stream:4 lose frame:53, isp state:0x100 frame:4
+[ 5517.113065] rkisp0: tx stream:4 lose frame:54, isp state:0x100 frame:4
+[ 5517.146398] rkisp0: tx stream:4 lose frame:55, isp state:0x100 frame:4
+[ 5517.179732] rkisp0: tx stream:4 lose frame:56, isp state:0x100 frame:4
+[ 5517.213065] rkisp0: tx stream:4 lose frame:57, isp state:0x100 frame:4
+[ 5517.246398] rkisp0: tx stream:4 lose frame:58, isp state:0x100 frame:4
+[ 5517.279732] rkisp0: tx stream:4 lose frame:59, isp state:0x100 frame:4
+[ 5517.313065] rkisp0: tx stream:4 lose frame:60, isp state:0x100 frame:4
+[ 5517.346385] rkisp0: tx stream:4 lose frame:61, isp state:0x100 frame:4
+[ 5517.379718] rkisp0: tx stream:4 lose frame:62, isp state:0x100 frame:4
+[ 5517.413065] rkisp0: tx stream:4 lose frame:63, isp state:0x100 frame:4
+[ 5517.446385] rkisp0: tx stream:4 lose frame:64, isp state:0x100 frame:4
+[ 5517.468243] rockchip-mipi-dphy-rx ff4b0000.csi-dphy: stream on:0
+[ 6170.184533] clk_mipicsi_out2io_fracdiv p_rate(297000000) is low than rate(24000000)*20, use integer or half-div
+[ 6170.194551] rkisp rkisp-vir0: can not get first iq setting in stream on
+[ 6170.196077] rockchip-mipi-dphy-rx ff4b0000.csi-dphy: stream on:1
+[ 6170.196125] rockchip-mipi-dphy-rx: data_rate_mbps 594
+[ 6173.226693] rkisp0: rkisp_stream_stop id:1 timeout
+[ 6173.227583] rockchip-mipi-dphy-rx ff4b0000.csi-dphy: stream on:0
+[root@Rockchip/oem/usr/share/iqfiles]
