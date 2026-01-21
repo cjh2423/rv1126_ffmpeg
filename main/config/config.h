@@ -24,9 +24,16 @@ extern "C" {
 #define APP_VIDEO_CODEC_H265 1
 #define APP_VIDEO_CODEC APP_VIDEO_CODEC_H264
 
+// 项目进度标志：0 关闭/1 开启。
+#define APP_Test_SAVE_FILE          0
+#define APP_Test_RTSP               1
+
+
 // 输出裸码流文件，便于快速验证。
-#define APP_VIDEO_SAVE_FILE 1
 #define APP_VIDEO_OUTPUT_PATH "/tmp/rv_demo.h264"
+
+// RTSP 推流地址（路径部分）。
+#define APP_RTSP_URL "/live/0"
 
 typedef struct {
     int vi_dev_id;
@@ -39,8 +46,8 @@ typedef struct {
     int bitrate;
     int gop;
     int codec;
-    int save_file;
     const char *output_path;
+    const char *rtsp_url;
 } VideoConfig;
 
 const VideoConfig *app_video_config_get(void);

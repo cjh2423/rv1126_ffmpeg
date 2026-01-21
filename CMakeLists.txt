@@ -38,6 +38,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/common/isp/rv1126
     ${PROJECT_SOURCE_DIR}/common/param
     ${PROJECT_SOURCE_DIR}/common/system
+    ${PROJECT_SOURCE_DIR}/common/rtsp
     ${PROJECT_SOURCE_DIR}/common/sysutil
     ${PROJECT_SOURCE_DIR}/main
     ${PROJECT_SOURCE_DIR}/main/video
@@ -73,6 +74,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/common/isp/rv1126 SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/param SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/system SRCS)
+aux_source_directory(${PROJECT_SOURCE_DIR}/common/rtsp SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/sysutil SRCS)
 
 # ============================================================
@@ -87,6 +89,7 @@ target_link_libraries(rv_demo
     pthread
     rockit              # Rockchip 多媒体框架库
     rkaiq               # Rockchip AIQ 库
+    rtsp                # RTSP 静态库
     rockchip_mpp        # Rockchip MPP 库
     drm                 # DRM 库
     asound              # ALSA 库

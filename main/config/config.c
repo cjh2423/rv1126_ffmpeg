@@ -11,8 +11,8 @@ static const VideoConfig g_video_config = {
     .bitrate = APP_VIDEO_BITRATE,
     .gop = APP_VIDEO_GOP,
     .codec = APP_VIDEO_CODEC,
-    .save_file = APP_VIDEO_SAVE_FILE,
     .output_path = APP_VIDEO_OUTPUT_PATH,
+    .rtsp_url = APP_RTSP_URL,
 };
 
 const VideoConfig *app_video_config_get(void) {

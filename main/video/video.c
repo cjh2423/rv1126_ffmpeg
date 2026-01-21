@@ -2,6 +2,8 @@
 
 #include "config.h"
 #include "log.h"
+#include "param.h"
+#include "rtsp.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -26,12 +28,14 @@ static void *venc_get_stream_thread(void *arg) {
     const VideoConfig *cfg = app_video_config_get();
     FILE *fp = NULL;
 
-    if (cfg->save_file && cfg->output_path && cfg->output_path[0] != '\0') {
+#if APP_Test_SAVE_FILE
+    if (cfg->output_path && cfg->output_path[0] != '\0') {
         fp = fopen(cfg->output_path, "wb");
         if (!fp) {
             LOG_ERROR("failed to open output file %s\n", cfg->output_path);
         }
     }
+#endif
 
     VENC_STREAM_S stStream;
     memset(&stStream, 0, sizeof(stStream));
@@ -47,10 +51,17 @@ static void *venc_get_stream_thread(void *arg) {
         int ret = RK_MPI_VENC_GetStream(g_venc_chn.s32ChnId, &stStream, 1000);
         if (ret == RK_SUCCESS) {
             void *data = RK_MPI_MB_Handle2VirAddr(stStream.pstPack->pMbBlk);
+            if (data && stStream.pstPack->u32Len > 0) {
+                // 推送码流到 RTSP。
+                rkipc_rtsp_write_video_frame(0, data, stStream.pstPack->u32Len,
+                                             stStream.pstPack->u64PTS);
+            }
+#if APP_Test_SAVE_FILE
             if (fp && data && stStream.pstPack->u32Len > 0) {
                 fwrite(data, 1, stStream.pstPack->u32Len, fp);
                 fflush(fp);
             }
+#endif
             RK_MPI_VENC_ReleaseStream(g_venc_chn.s32ChnId, &stStream);
         }
     }
@@ -201,6 +212,19 @@ int rk_video_init(void) {
     if (ret)
         return ret;
 
+    // 设置 RTSP 输出码流类型，确保与编码格式一致。
+    rk_param_set_string("video.0:output_data_type",
+                        (cfg->codec == APP_VIDEO_CODEC_H265) ? "H.265" : "H.264");
+
+#if APP_Test_RTSP
+    // 初始化 RTSP 服务。
+    ret = rkipc_rtsp_init(cfg->rtsp_url, NULL, NULL);
+    if (ret) {
+        LOG_ERROR("rkipc_rtsp_init failed\n");
+        return ret;
+    }
+#endif
+
     // 绑定 VI 到 VENC，直接推送帧给编码器。
     if (RK_MPI_SYS_Bind(&g_vi_chn, &g_venc_chn) != RK_SUCCESS) {
         LOG_ERROR("RK_MPI_SYS_Bind VI->VENC failed\n");
@@ -225,6 +249,9 @@ int rk_video_deinit(void) {
     pthread_join(g_venc_thread, NULL);
 
     RK_MPI_SYS_UnBind(&g_vi_chn, &g_venc_chn);
+#if APP_Test_RTSP
+    rkipc_rtsp_deinit();
+#endif
     RK_MPI_VENC_StopRecvFrame(cfg->vi_chn_id);
     RK_MPI_VENC_DestroyChn(cfg->vi_chn_id);
     RK_MPI_VI_DisableChn(cfg->vi_pipe_id, cfg->vi_chn_id);
