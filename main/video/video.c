@@ -22,10 +22,19 @@ static int g_venc_thread_valid[2];
 static int g_video_run = 0;
 static MPP_CHN_S g_vi_chn;
 static MPP_CHN_S g_venc_chn[2];
+static int64_t g_rtsp_base_time_us[2] = {-1, -1};       // RTSP 基准时间（微秒）。
+static int64_t g_rtsp_base_pts[2] = {0, 0};             // RTSP 基准 PTS。
 // 线程参数结构体。
 typedef struct {
     const VideoConfig *cfg;
 } VencThreadArgs;
+
+// 获取系统时间（微秒）。
+static int64_t get_realtime_us(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+}
 
 // 从 VENC 拉取码流，可选写入文件。
 static void *venc_get_stream_thread(void *arg) {
@@ -59,8 +68,15 @@ static void *venc_get_stream_thread(void *arg) {
 #if APP_Test_RTSP == 1
             if (data && stStream.pstPack->u32Len > 0) {
                 // 推送码流到 RTSP。
+                if (g_rtsp_base_time_us[cfg->rtsp_id] < 0) {
+                    g_rtsp_base_time_us[cfg->rtsp_id] = get_realtime_us();
+                    g_rtsp_base_pts[cfg->rtsp_id] = (int64_t)stStream.pstPack->u64PTS;
+                }
+                int64_t pts_offset = (int64_t)stStream.pstPack->u64PTS -
+                                     g_rtsp_base_pts[cfg->rtsp_id];
+                int64_t rtsp_pts = g_rtsp_base_time_us[cfg->rtsp_id] + pts_offset;
                 rkipc_rtsp_write_video_frame(cfg->rtsp_id, data, stStream.pstPack->u32Len,
-                                             stStream.pstPack->u64PTS);
+                                             rtsp_pts);
             }
 #endif
 #if APP_Test_SAVE_FILE == 1

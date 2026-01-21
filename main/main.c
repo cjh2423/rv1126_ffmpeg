@@ -92,6 +92,8 @@ int main(int argc, char **argv) {
 	LOG_INFO("rkipc_ini_path_ is %s, rkipc_iq_file_path_ is %s, rkipc_log_level "
 	         "is %d\n",
 	         rkipc_ini_path_, rkipc_iq_file_path_, rkipc_log_level);
+	// 运行时只输出一次系统时间。
+	LOG_INFO("当前时间: %s\n", get_time_string());
 
 	// 初始化顺序：param -> system -> isp -> mpi -> video。
 	rk_param_init(rkipc_ini_path_);
