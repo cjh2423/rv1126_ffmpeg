@@ -25,6 +25,7 @@
 | **librockchip_mpp.so** | Rockchip 媒体处理平台 (编解码核心) | 必选 (VENC) |
 | **librtsp.a** | RTSP 协议栈静态库 | 必选 (网络推流) |
 | **librksysutils.so** | Rockchip 系统工具封装库 | 必选 |
+| **librkmuxer.so** | Rockchip 封装复用库 (RTMP 推流核心) | 必选 (RTMP) |
 | **libiniparser.a** | INI 配置文件解析库 | 内部集成 |
 
 ---

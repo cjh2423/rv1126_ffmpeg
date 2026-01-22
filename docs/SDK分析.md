@@ -19,6 +19,7 @@
 | **VI** | `librockit.so` | 视频输入。负责将 ISP 处理后的 YUV 数据捕获并分发。 |
 | **VENC** | `librockchip_mpp.so` | 视频编码。将 YUV 原始帧压缩为 H.264/H.265。 |
 | **RTSP** | `librtsp.a` | 负责将 VENC 码流打包并通过 RTSP 协议分发。 |
+| **RTMP** | `librkmuxer.so` | 负责将码流封装为 FLV 并通过 RTMP 协议推流。 |
 
 ---
 

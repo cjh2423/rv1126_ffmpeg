@@ -11,7 +11,7 @@
  * └─────────────┘     └─────────────┘     └─────────────┘
  *        │                   │                   │
  *        ▼                   ▼                   ▼
- *    获取YUV帧          送帧到编码器         推送到RTSP
+ *    获取YUV帧          送帧到编码器         推送到RTSP/RTMP
  *                       获取编码码流
  * 
  * 线程间通信使用线程安全的帧队列 (FrameQueue)：
@@ -30,8 +30,13 @@
 #include "config.h"
 #include "log.h"
 #include "param.h"
-#include "rtsp.h"
 #include "frame_queue.h"
+#if APP_Test_RTSP
+#include "rtsp.h"
+#endif
+#if APP_Test_RTMP
+#include "rtmp.h"
+#endif
 
 #include <pthread.h>
 #include <stdio.h>
@@ -93,7 +98,7 @@ typedef struct {
 } VideoStreamContext;
 
 /** @brief 视频流上下文 (支持两路) */
-static VideoStreamContext g_stream_ctx[2];
+static VideoStreamContext g_stream_ctx[APP_MAX_STREAMS];
 
 /** @brief 全局运行标志 */
 static volatile int g_video_run = 0;
@@ -105,6 +110,7 @@ static MPP_CHN_S g_vi_chn;
  *                              内部辅助函数
  * ========================================================================= */
 
+#if APP_Test_RTSP
 /**
  * @brief 获取当前系统微秒级时间戳
  * 
@@ -115,6 +121,7 @@ static int64_t get_realtime_us(void) {
     gettimeofday(&tv, NULL);
     return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
 }
+#endif
 
 /* =========================================================================
  *                              编码线程
@@ -209,13 +216,14 @@ static void *rtsp_push_thread(void *arg) {
     const VideoConfig *cfg = ctx->cfg;
     FILE *fp = NULL;
     
-    LOG_INFO("[RTSP-%d] Push thread started\n", cfg->rtsp_id);
+    LOG_INFO("[STREAM-%d] Push thread started (RTSP=%d, RTMP=%d)\n", 
+             cfg->stream_id, cfg->enable_rtsp, cfg->enable_rtmp);
     
 #if APP_Test_SAVE_FILE == 1
     if (cfg->output_path && cfg->output_path[0] != '\0') {
         fp = fopen(cfg->output_path, "wb");
         if (!fp) {
-            LOG_ERROR("[RTSP-%d] Failed to open output file %s\n", cfg->rtsp_id, cfg->output_path);
+            LOG_ERROR("[STREAM-%d] Failed to open output file %s\n", cfg->stream_id, cfg->output_path);
         }
     }
 #endif
@@ -229,8 +237,8 @@ static void *rtsp_push_thread(void *arg) {
             continue;  // 超时或队列关闭
         }
         
-#if APP_Test_RTSP == 1
-        if (stream_frame.data && stream_frame.size > 0) {
+#if APP_Test_RTSP
+        if (cfg->enable_rtsp && stream_frame.data && stream_frame.size > 0) {
             // 初始化 RTSP 时间戳基准（首帧逻辑）
             if (ctx->rtsp_base_time_us < 0) {
                 ctx->rtsp_base_time_us = get_realtime_us();
@@ -241,8 +249,18 @@ static void *rtsp_push_thread(void *arg) {
             int64_t pts_offset = (int64_t)stream_frame.pts - ctx->rtsp_base_pts;
             int64_t rtsp_pts = ctx->rtsp_base_time_us + pts_offset;
             
-            rkipc_rtsp_write_video_frame(cfg->rtsp_id, stream_frame.data, 
+            rkipc_rtsp_write_video_frame(cfg->stream_id, stream_frame.data, 
                                           stream_frame.size, rtsp_pts);
+        }
+#endif
+
+#if APP_Test_RTMP
+        // RTMP 推流
+        if (cfg->enable_rtmp && stream_frame.data && stream_frame.size > 0) {
+            rk_rtmp_write_video_frame(cfg->stream_id, stream_frame.data, 
+                                      stream_frame.size,
+                                      stream_frame.pts,
+                                      stream_frame.is_keyframe);
         }
 #endif
         
@@ -269,7 +287,7 @@ static void *rtsp_push_thread(void *arg) {
     
     if (fp) fclose(fp);
     
-    LOG_INFO("[RTSP-%d] Push thread exiting\n", cfg->rtsp_id);
+    LOG_INFO("[STREAM-%d] Push thread exiting\n", cfg->stream_id);
     return NULL;
 }
 
@@ -478,6 +496,18 @@ static int stream_context_init(VideoStreamContext *ctx, const VideoConfig *cfg,
     LOG_INFO("Stream context for chn %d initialized (VENC thread + RTSP thread)\n", 
              cfg->venc_chn_id);
     
+#if APP_Test_RTMP
+    // 初始化 RTMP 推流 (根据配置开关)
+    if (cfg->enable_rtmp) { // 检查此码流是否启用 RTMP
+        int rtmp_ret = rk_rtmp_init(cfg->stream_id, (char *)cfg->rtmp_url);
+        if (rtmp_ret != 0) {
+            LOG_WARN("Failed to init RTMP stream %d, continuing without RTMP\n", cfg->stream_id);
+        } else {
+            LOG_INFO("RTMP initialized for stream %d: %s\n", cfg->stream_id, cfg->rtmp_url);
+        }
+    }
+#endif
+    
     return 0;
 }
 
@@ -533,6 +563,13 @@ static void stream_context_deinit(VideoStreamContext *ctx, MPP_CHN_S *vi_chn) {
         ctx->stream_queue = NULL;
     }
     
+#if APP_Test_RTMP
+    // 销毁 RTMP
+    if (ctx->cfg->enable_rtmp) {
+        rk_rtmp_deinit(ctx->cfg->stream_id);
+    }
+#endif
+    
     LOG_INFO("Stream context for chn %d deinitialized\n", ctx->cfg->venc_chn_id);
 }
 
@@ -546,37 +583,33 @@ static void stream_context_deinit(VideoStreamContext *ctx, MPP_CHN_S *vi_chn) {
  * @return 0 成功, 非 0 失败
  */
 int rk_video_init(void) {
-    const VideoConfig *cfg = app_video_config_get();
-    const VideoConfig *cfg1 = app_video1_config_get();
     int ret;
-
     LOG_INFO("=== Initializing video subsystem (Multi-threaded) ===\n");
 
-    // 设置 VI 源通道信息
+    const VideoConfig *cfgs[APP_MAX_STREAMS];
+    cfgs[0] = app_video_config_get();
+#if APP_ENABLE_SUB_STREAM == 1
+    cfgs[1] = app_video1_config_get();
+#else
+    cfgs[1] = NULL;
+#endif
+
+    // 1. 初始化 VI 硬件 (以主流参数为准)
     g_vi_chn.enModId = RK_ID_VI;
-    g_vi_chn.s32DevId = cfg->vi_dev_id;
-    g_vi_chn.s32ChnId = cfg->vi_chn_id;
+    g_vi_chn.s32DevId = cfgs[0]->vi_dev_id;
+    g_vi_chn.s32ChnId = cfgs[0]->vi_chn_id;
     
-    memset(g_stream_ctx, 0, sizeof(g_stream_ctx));
-
-    // 1. 初始化 VI 硬件
-    ret = vi_dev_init(cfg);
+    ret = vi_dev_init(cfgs[0]);
     if (ret) return ret;
-    
-    ret = vi_chn_init(cfg);
+    ret = vi_chn_init(cfgs[0]);
     if (ret) return ret;
 
-#if APP_Test_RTSP == 1
-    // 2. 配置 RTSP 编码格式参数
-    rk_param_set_string("video.0:output_data_type",
-                        (cfg->codec == APP_VIDEO_CODEC_H265) ? "H.265" : "H.264");
-    if (APP_Test_VENC1 == 1) {
-        rk_param_set_string("video.1:output_data_type",
-                            (cfg1->codec == APP_VIDEO_CODEC_H265) ? "H.265" : "H.264");
-    }
-
-    // 初始化 RTSP Server
-    ret = rkipc_rtsp_init(cfg->rtsp_url, (APP_Test_VENC1 == 1) ? cfg1->rtsp_url : NULL, NULL);
+#if APP_Test_RTSP
+    // 2. 初始化 RTSP Server
+    const char *url0 = (cfgs[0] && cfgs[0]->enable_rtsp) ? cfgs[0]->rtsp_url : NULL;
+    const char *url1 = (APP_MAX_STREAMS > 1 && cfgs[1] && cfgs[1]->enable_rtsp) ? cfgs[1]->rtsp_url : NULL;
+    
+    ret = rkipc_rtsp_init(url0, url1, NULL);
     if (ret) {
         LOG_ERROR("rkipc_rtsp_init failed\n");
         return ret;
@@ -584,30 +617,25 @@ int rk_video_init(void) {
 #endif
 
     g_video_run = 1;
+    memset(g_stream_ctx, 0, sizeof(g_stream_ctx));
 
-    // 3. 初始化主码流处理上下文
-    ret = stream_context_init(&g_stream_ctx[0], cfg, &g_vi_chn);
-    if (ret) {
-        g_video_run = 0;
-        return ret;
-    }
-
-    // 4. 初始化子码流处理上下文 (若开启)
-    if (APP_Test_VENC1 == 1) {
-        ret = stream_context_init(&g_stream_ctx[1], cfg1, &g_vi_chn);
-        if (ret) {
-            stream_context_deinit(&g_stream_ctx[0], &g_vi_chn);
-            g_video_run = 0;
-            return ret;
+    // 3. 动态初始化各路流
+    for (int i = 0; i < APP_MAX_STREAMS; i++) {
+        if (!cfgs[i]) continue;
+        
+        // 只要 RTSP 或 RTMP 有一个开启，就初始化该路流
+        if (cfgs[i]->enable_rtsp || cfgs[i]->enable_rtmp) {
+            ret = stream_context_init(&g_stream_ctx[i], cfgs[i], &g_vi_chn);
+            if (ret) {
+                LOG_ERROR("Failed to init stream context %d\n", i);
+                // 简单起见，失败则停止已开启的
+                g_video_run = 0;
+                return ret;
+            }
         }
     }
 
     LOG_INFO("=== Video subsystem initialized successfully ===\n");
-    LOG_INFO("  Pipeline: [VI] --(Bind)--> [VENC Thread] --> [RTSP Thread]\n");
-    LOG_INFO("  Streams: Main=%dx%d@%dfps, Sub=%s\n",
-             cfg->width, cfg->height, cfg->fps,
-             (APP_Test_VENC1 == 1) ? "enabled" : "disabled");
-    
     return 0;
 }
 
@@ -624,13 +652,14 @@ int rk_video_deinit(void) {
     // 1. 停止全局运行标志
     g_video_run = 0;
 
-    // 2. 销毁各路流上下文
-    if (APP_Test_VENC1 == 1) {
-        stream_context_deinit(&g_stream_ctx[1], &g_vi_chn);
+    // 2. 销毁已开启的流上下文
+    for (int i = APP_MAX_STREAMS - 1; i >= 0; i--) { // 倒序销毁
+        if (g_stream_ctx[i].cfg) {
+            stream_context_deinit(&g_stream_ctx[i], &g_vi_chn);
+        }
     }
-    stream_context_deinit(&g_stream_ctx[0], &g_vi_chn);
 
-#if APP_Test_RTSP == 1
+#if APP_Test_RTSP
     // 3. 关闭 RTSP 服务
     rkipc_rtsp_deinit();
 #endif
