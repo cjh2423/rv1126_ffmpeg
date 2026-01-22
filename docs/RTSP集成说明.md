@@ -9,9 +9,11 @@
 ### 1. 数据流向
 ```mermaid
 graph LR
-    Sensor --> ISP --> VI --> VENC
+    Sensor --> ISP --> VI --(Bind)--> VENC
     VENC -- 获取码流 --> VencThread
-    VencThread -- 推送数据 --> RTSP_Server
+    VencThread -- Enqueue --> FrameQueue
+    FrameQueue -- Dequeue --> RtspThread
+    RtspThread -- 推送数据 --> RTSP_Server
     RTSP_Server -- 网络传输 --> Player(VLC/ffplay)
 ```
 
@@ -42,12 +44,18 @@ rkipc_rtsp_init(cfg->rtsp_url, cfg1->rtsp_url, NULL);
 ```
 
 ### 2. 帧数据的实时推送
-在编码线程 `venc_get_stream_thread` 中，从 VENC 获取码流后立即推送到 RTSP 缓存空间：
+采用 **生产者-消费者** 模型：
+1. **编码线程 (`venc_encode_thread`)**: 从 VENC 获取码流，封装后推入 `stream_queue`。
+2. **推流线程 (`rtsp_push_thread`)**: 从队列取出数据，计算 PTS 并发送。
+
 ```c
-// 计算相对于基准时间的 PTS
-int64_t rtsp_pts = g_rtsp_base_time_us + pts_offset;
-// 推送到 RTSP 通道
-rkipc_rtsp_write_video_frame(cfg->rtsp_id, data, stStream.pstPack->u32Len, rtsp_pts);
+// 推流线程逻辑简化
+FrameData stream_frame;
+if (frame_queue_pop(ctx->stream_queue, &stream_frame, TIMEOUT) == 0) {
+    // ... 计算时间戳 ...
+    rkipc_rtsp_write_video_frame(id, stream_frame.data, stream_frame.size, pts);
+    free(stream_frame.data); // 释放内存
+}
 ```
 
 ---
