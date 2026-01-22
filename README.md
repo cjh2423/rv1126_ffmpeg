@@ -1,56 +1,76 @@
-# RV1126 采集+编码示例
+# 🎥 RV1126 采集 + 编码 + RTSP 开发示例
 
-这是一个最小化的 RV1126 视频采集与编码工程：
-- 只保留 ISP/VI/VENC 相关流程
-- 启动后将裸码流写入文件（默认 `/tmp/rv_demo.h264`）
-- 不包含音频、RTSP、OSD、存储、AI 等功能
+本项目是一个基于 Rockchip RV1126 平台的全功能 视频采集、硬件编码与 RTSP 推流 演示工程。它提供了从底层驱动调用到上层协议对接的完整实现。
 
-## 目录结构
-- `main/` 入口与视频模块
-- `main/config/` 统一宏配置（硬编码）
-- `main/video/` VI->VENC 采集与编码
-- `common/` 精简公共模块（仅 ISP/param/system/sysutil/rtsp）
-- `3rdparty/media/` SDK 媒体库
+---
 
-## 编译
-使用 SDK 内置交叉编译工具链：
+## 🚀 主要功能
 
+- **双码流编码**: 同时支持主码流 (1080P) 与子码流 (VGA/720P) 并行编码。
+- **RTSP 实时推流**: 集成 RTSP 服务端，支持客户端实时预览 (`rtsp://<ip>/live/0` 及 `/live/1`)。
+- **多格式支持**: 硬件加速的 H.264 / H.265 编码，切换灵活。
+- **参数化配置**: 支持 INI 配置文件读取与运行时动态参数管理。
+- **完善的初始化**: 包含 ISP、VI、VENC、SYS 的标准初始化流程与资源回收。
+- **开发友好**: 提供简单的命令行参数控制，支持一键编译运行。
+
+---
+
+## 📂 项目结构
+
+```bash
+.
+├── main/               # 业务逻辑
+│   ├── main.c           # 程序入口 (参数解析、模块生命周期管理)
+│   ├── config/          # 静态宏定义与配置模版
+│   └── video/           # 采集与编码核心 (VI -> VENC, RTSP 封装)
+├── common/             # 通用封装模块
+│   ├── isp/             # ISP/AIQ 画质初始化
+│   ├── param/           # 基于 iniparser 的参数管理 (INI 读写)
+│   ├── rtsp/            # RTSP 服务与媒体流分发
+│   └── sysutil/         # 系统工具 (时间戳、内存操作等)
+├── docs/               # 详细开发文档
+├── 3rdparty/media/    # Rockchip SDK 媒体库 (头文件与库)
+├── build.sh            # 一键编译脚本
+└── run.sh              # 板端运行启动脚本
+```
+
+---
+
+## 🛠️ 运行说明
+
+### 1. 编译
 ```bash
 ./build.sh
 ```
 
-生成文件：`build/rv_demo`
-
-## 运行
-在板端执行：
-
+### 2. 运行参数
+程序支持多个命令行参数，灵活适配不同环境：
 ```bash
-./run.sh
+./rv_demo -c /userdata/rkipc.ini -a /etc/iqfiles -l 2
 ```
+- `-c`: 指定 INI 配置文件路径 (默认 `/userdata/rkipc.ini`)。
+- `-a`: 指定 ISP IQ 文件存放目录 (默认 `/etc/iqfiles`)。
+- `-l`: 设置日志级别 (0:ERROR, 1:WARN, 2:INFO, 3:DEBUG)。
 
-默认输出裸码流：`/tmp/rv_demo.h264`
+---
 
-## 配置（硬编码）
-修改 `main/config/config.h` 中的宏：
-- 分辨率、帧率、码率、GOP、编码格式
-- VI 设备/管线/通道与实体名
-- 输出文件路径
+## 📽️ 取回与实时预览
 
-## 取回与播放
-拉取码流：
+1. **主码流预览**:
+   ```bash
+   ffplay rtsp://<开发板IP>/live/0
+   ```
+2. **子码流预览**:
+   ```bash
+   ffplay rtsp://<开发板IP>/live/1
+   ```
 
-```bash
-adb pull /tmp/rv_demo.h264 ./
-```
+---
 
-直接播放裸流：
+## 📖 核心文档导航
 
-```bash
-ffplay -f h264 -framerate 30 rv_demo.h264
-```
-
-或封装为 MP4：
-
-```bash
-ffmpeg -framerate 30 -i rv_demo.h264 -c copy rv_demo.mp4
-```
+- [⚡ 快速开始指南](./docs/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B.md)
+- [📡 RTSP 功能说明](./docs/RTSP%E9%9B%86%E6%88%90%E8%AF%B4%E6%98%8E.md)
+- [⚙️ 项目演进路线](./docs/%E9%A1%B9%E7%9B%AE%E8%AE%A1%E5%88%92.md)
+- [🔍 SDK 开发分析](./docs/SDK%E5%88%86%E6%9E%90.md)
+- [🕒 RTC 时钟同步](./docs/RTC%E8%AF%B4%E6%98%8E.md)
