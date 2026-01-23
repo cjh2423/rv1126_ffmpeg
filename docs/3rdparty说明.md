@@ -27,6 +27,7 @@
 | **librksysutils.so** | Rockchip 系统工具封装库 | 必选 |
 | **librkmuxer.so** | Rockchip 封装复用库 (RTMP 推流核心) | 必选 (RTMP) |
 | **librga.so** | Rockchip 2D 图形加速库 | 必选 (RGA) |
+| **libfreetype.a** | 矢量字体渲染引擎 | 必选 (OSD) |
 | **libiniparser.a** | INI 配置文件解析库 | 内部集成 |
 
 ---

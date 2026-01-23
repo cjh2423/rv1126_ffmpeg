@@ -32,6 +32,7 @@ add_definitions(-DISP_HW_V20)
 # ============================================================
 set(MEDIA_DIR ${PROJECT_SOURCE_DIR}/3rdparty/media)
 set(FFMPEG_DIR ${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg_install)
+set(FREETYPE_DIR ${PROJECT_SOURCE_DIR}/3rdparty/freetype)
 set(ALSA_DIR "/home/u22/sdk/rv1126_ipc_linux_release/output/out/media_out/root/usr/lib")
 
 include_directories(
@@ -42,6 +43,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/common/rtsp
     ${PROJECT_SOURCE_DIR}/common/rtmp
     ${PROJECT_SOURCE_DIR}/common/sysutil
+    ${PROJECT_SOURCE_DIR}/common/osd
     ${PROJECT_SOURCE_DIR}/main
     ${PROJECT_SOURCE_DIR}/main/video
     ${PROJECT_SOURCE_DIR}/main/config
@@ -55,6 +57,8 @@ include_directories(
     ${MEDIA_DIR}/include/rkaiq/ipc_server
     ${MEDIA_DIR}/include/rga
     ${FFMPEG_DIR}/include
+    ${FREETYPE_DIR}/include
+    ${FREETYPE_DIR}/include/freetype2
 )
 
 # ============================================================
@@ -63,6 +67,7 @@ include_directories(
 link_directories(
     ${MEDIA_DIR}/lib
     ${FFMPEG_DIR}/lib
+    ${FREETYPE_DIR}/lib
 )
 
 if(EXISTS "${ALSA_DIR}/libasound.so.2.0.0")
@@ -82,6 +87,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/common/system SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/rtsp SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/rtmp SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/sysutil SRCS)
+aux_source_directory(${PROJECT_SOURCE_DIR}/common/osd SRCS)
 
 # ============================================================
 # 可执行文件
@@ -103,6 +109,7 @@ target_link_libraries(rv_demo
     rksysutils          # Rockchip 系统工具库
     rga                 # Rockchip RGA 库
     rkmuxer             # Rockchip Muxer 库 (RTMP 推流)
+    freetype            # FreeType 字体渲染库 (OSD)
     # FFmpeg 库 (备用)
     avformat
     avcodec

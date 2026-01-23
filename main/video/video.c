@@ -38,6 +38,9 @@
 #if APP_Test_RTMP
 #include "rtmp.h"
 #endif
+#if APP_Test_OSD
+#include "video_osd.h"
+#endif
 
 #include <pthread.h>
 #include <stdio.h>
@@ -639,6 +642,11 @@ int rk_video_init(void) {
         }
     }
 
+#if APP_Test_OSD
+    // 5. 初始化 OSD 时间戳叠加
+    video_osd_init(cfgs[0]->venc_chn_id);
+#endif
+
     LOG_INFO("=== Video subsystem initialized successfully ===\n");
     return 0;
 }
@@ -663,16 +671,21 @@ int rk_video_deinit(void) {
         }
     }
 
+#if APP_Test_OSD
+    // 3. 关闭 OSD 时间戳叠加
+    video_osd_deinit();
+#endif
+
 #if APP_Test_RTSP
-    // 3. 关闭 RTSP 服务
+    // 4. 关闭 RTSP 服务
     rkipc_rtsp_deinit();
 #endif
 
-    // 4. 禁用并关闭 VI 通道与设备
+    // 5. 禁用并关闭 VI 通道与设备
     RK_MPI_VI_DisableChn(cfg->vi_pipe_id, cfg->vi_chn_id);
     RK_MPI_VI_DisableDev(cfg->vi_dev_id);
 
-    // 5. 释放 RGA 资源
+    // 6. 释放 RGA 资源
     rga_utils_deinit();
 
     LOG_INFO("=== Video subsystem deinitialized ===\n");

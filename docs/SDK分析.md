@@ -21,6 +21,7 @@
 | **RGA** | `librga.so` | 2D 硬件加速。负责图像缩放、裁剪、旋转与格式转换。 |
 | **RTSP** | `librtsp.a` | 负责将 VENC 码流打包并通过 RTSP 协议分发。 |
 | **RTMP** | `librkmuxer.so` | 负责将码流封装为 FLV 并通过 RTMP 协议推流。 |
+| **OSD** | `FreeType` | 矢量字体渲染库，配合 RK_MPI_RGN 实现文字叠加。 |
 
 ---
 

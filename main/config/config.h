@@ -46,6 +46,7 @@ extern "C" {
 // 全局功能宏 (向下兼容旧逻辑，或用于编译条件)
 #define APP_Test_RTSP               (APP_STREAM0_ENABLE_RTSP || APP_STREAM1_ENABLE_RTSP)
 #define APP_Test_RTMP               (APP_STREAM0_ENABLE_RTMP || APP_STREAM1_ENABLE_RTMP)
+#define APP_Test_OSD                1       // OSD 时间戳叠加开关
 #define APP_Test_SAVE_FILE          0       // 保存裸码流文件开关（默认不开）
 
 
