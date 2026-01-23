@@ -643,8 +643,19 @@ int rk_video_init(void) {
     }
 
 #if APP_Test_OSD
-    // 5. 初始化 OSD 时间戳叠加
-    video_osd_init(cfgs[0]->venc_chn_id);
+    // 5. 初始化 OSD 时间戳叠加 (绑定到所有活跃的 VENC 通道)
+    {
+        int osd_chns[APP_MAX_STREAMS];
+        int osd_chn_count = 0;
+        for (int i = 0; i < APP_MAX_STREAMS; i++) {
+            if (g_stream_ctx[i].cfg) {
+                osd_chns[osd_chn_count++] = g_stream_ctx[i].cfg->venc_chn_id;
+            }
+        }
+        if (osd_chn_count > 0) {
+            video_osd_init(osd_chns, osd_chn_count);
+        }
+    }
 #endif
 
     LOG_INFO("=== Video subsystem initialized successfully ===\n");

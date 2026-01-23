@@ -6,6 +6,7 @@
  * - 使用 RK_MPI_RGN_* 系列接口创建和管理叠加区域
  * - 将 OSD 组件生成的 ARGB8888 位图设置到 Region 上
  * - 支持实时时间戳更新
+ * - 支持同时绑定多个 VENC 通道
  */
 
 #include "video_osd.h"
@@ -28,8 +29,9 @@
 #define OSD_RGN_HANDLE_BASE 0           /* Region Handle 起始值 */
 
 /* 全局状态 */
-static int g_venc_chn_id = 0;           /* 绑定的 VENC 通道 */
-static int g_osd_initialized = 0;       /* 初始化标志 */
+static int g_venc_chn_ids[VIDEO_OSD_MAX_CHN];  /* 绑定的 VENC 通道列表 */
+static int g_venc_chn_count = 0;               /* 通道数量 */
+static int g_osd_initialized = 0;              /* 初始化标志 */
 
 /* =========================================================================
  *                              OSD 回调函数实现
@@ -37,6 +39,8 @@ static int g_osd_initialized = 0;       /* 初始化标志 */
 
 /**
  * @brief 创建 OSD Bitmap 区域 (用于时间戳、文字、Logo 等)
+ * 
+ * 一个 Region 会被 Attach 到所有已注册的 VENC 通道上。
  */
 static int osd_bmp_create_callback(int osd_id, osd_data_s *data) {
     if (!data || osd_id >= OSD_MAX_REGION_NUM) {
@@ -44,16 +48,14 @@ static int osd_bmp_create_callback(int osd_id, osd_data_s *data) {
         return -1;
     }
     
-    LOG_INFO("Creating OSD region %d, size=%dx%d, pos=(%d,%d)\n",
-             osd_id, data->width, data->height, data->origin_x, data->origin_y);
+    LOG_INFO("Creating OSD region %d, size=%dx%d, pos=(%d,%d), bindTo %d channels\n",
+             osd_id, data->width, data->height, data->origin_x, data->origin_y, g_venc_chn_count);
     
     RGN_HANDLE handle = OSD_RGN_HANDLE_BASE + osd_id;
     RGN_ATTR_S rgn_attr;
-    RGN_CHN_ATTR_S rgn_chn_attr;
-    MPP_CHN_S mpp_chn;
     int ret;
     
-    /* 1. 创建 Region */
+    /* 1. 创建 Region (只需创建一次) */
     memset(&rgn_attr, 0, sizeof(rgn_attr));
     rgn_attr.enType = OVERLAY_RGN;
     rgn_attr.unAttr.stOverlay.enPixelFmt = RK_FMT_BGRA8888;
@@ -81,30 +83,35 @@ static int osd_bmp_create_callback(int osd_id, osd_data_s *data) {
         }
     }
     
-    /* 3. 绑定到 VENC 通道 */
-    memset(&mpp_chn, 0, sizeof(mpp_chn));
-    mpp_chn.enModId = RK_ID_VENC;
-    mpp_chn.s32DevId = 0;
-    mpp_chn.s32ChnId = g_venc_chn_id;
-    
-    memset(&rgn_chn_attr, 0, sizeof(rgn_chn_attr));
-    rgn_chn_attr.bShow = data->enable ? RK_TRUE : RK_FALSE;
-    rgn_chn_attr.enType = OVERLAY_RGN;
-    rgn_chn_attr.unChnAttr.stOverlayChn.stPoint.s32X = data->origin_x;
-    rgn_chn_attr.unChnAttr.stOverlayChn.stPoint.s32Y = data->origin_y;
-    rgn_chn_attr.unChnAttr.stOverlayChn.u32BgAlpha = 0;      /* 背景透明 */
-    rgn_chn_attr.unChnAttr.stOverlayChn.u32FgAlpha = 255;    /* 前景完全不透明 */
-    rgn_chn_attr.unChnAttr.stOverlayChn.u32Layer = osd_id;
-    
-    ret = RK_MPI_RGN_AttachToChn(handle, &mpp_chn, &rgn_chn_attr);
-    if (ret != RK_SUCCESS) {
-        LOG_ERROR("RK_MPI_RGN_AttachToChn(%d) to VENC[%d] failed: 0x%x\n", 
-                  handle, g_venc_chn_id, ret);
-        RK_MPI_RGN_Destroy(handle);
-        return -1;
+    /* 3. 绑定到所有 VENC 通道 */
+    for (int i = 0; i < g_venc_chn_count; i++) {
+        MPP_CHN_S mpp_chn;
+        RGN_CHN_ATTR_S rgn_chn_attr;
+        
+        memset(&mpp_chn, 0, sizeof(mpp_chn));
+        mpp_chn.enModId = RK_ID_VENC;
+        mpp_chn.s32DevId = 0;
+        mpp_chn.s32ChnId = g_venc_chn_ids[i];
+        
+        memset(&rgn_chn_attr, 0, sizeof(rgn_chn_attr));
+        rgn_chn_attr.bShow = data->enable ? RK_TRUE : RK_FALSE;
+        rgn_chn_attr.enType = OVERLAY_RGN;
+        rgn_chn_attr.unChnAttr.stOverlayChn.stPoint.s32X = data->origin_x;
+        rgn_chn_attr.unChnAttr.stOverlayChn.stPoint.s32Y = data->origin_y;
+        rgn_chn_attr.unChnAttr.stOverlayChn.u32BgAlpha = 0;      /* 背景透明 */
+        rgn_chn_attr.unChnAttr.stOverlayChn.u32FgAlpha = 255;    /* 前景完全不透明 */
+        rgn_chn_attr.unChnAttr.stOverlayChn.u32Layer = osd_id;
+        
+        ret = RK_MPI_RGN_AttachToChn(handle, &mpp_chn, &rgn_chn_attr);
+        if (ret != RK_SUCCESS) {
+            LOG_ERROR("RK_MPI_RGN_AttachToChn(%d) to VENC[%d] failed: 0x%x\n", 
+                      handle, g_venc_chn_ids[i], ret);
+            /* 继续尝试其他通道 */
+        } else {
+            LOG_INFO("OSD region %d attached to VENC[%d]\n", osd_id, g_venc_chn_ids[i]);
+        }
     }
     
-    LOG_INFO("OSD region %d created and attached to VENC[%d]\n", osd_id, g_venc_chn_id);
     return 0;
 }
 
@@ -117,14 +124,18 @@ static int osd_bmp_destroy_callback(int osd_id) {
     }
     
     RGN_HANDLE handle = OSD_RGN_HANDLE_BASE + osd_id;
-    MPP_CHN_S mpp_chn;
     
-    memset(&mpp_chn, 0, sizeof(mpp_chn));
-    mpp_chn.enModId = RK_ID_VENC;
-    mpp_chn.s32DevId = 0;
-    mpp_chn.s32ChnId = g_venc_chn_id;
+    /* 从所有通道解绑 */
+    for (int i = 0; i < g_venc_chn_count; i++) {
+        MPP_CHN_S mpp_chn;
+        memset(&mpp_chn, 0, sizeof(mpp_chn));
+        mpp_chn.enModId = RK_ID_VENC;
+        mpp_chn.s32DevId = 0;
+        mpp_chn.s32ChnId = g_venc_chn_ids[i];
+        
+        RK_MPI_RGN_DetachFromChn(handle, &mpp_chn);
+    }
     
-    RK_MPI_RGN_DetachFromChn(handle, &mpp_chn);
     RK_MPI_RGN_Destroy(handle);
     
     LOG_INFO("OSD region %d destroyed\n", osd_id);
@@ -167,12 +178,10 @@ static int osd_cover_create_callback(int osd_id, osd_data_s *data) {
         return -1;
     }
     
-    LOG_INFO("Creating Cover region %d\n", osd_id);
+    LOG_INFO("Creating Cover region %d for %d channels\n", osd_id, g_venc_chn_count);
     
     RGN_HANDLE handle = OSD_RGN_HANDLE_BASE + osd_id;
     RGN_ATTR_S rgn_attr;
-    RGN_CHN_ATTR_S rgn_chn_attr;
-    MPP_CHN_S mpp_chn;
     int ret;
     
     memset(&rgn_attr, 0, sizeof(rgn_attr));
@@ -184,26 +193,31 @@ static int osd_cover_create_callback(int osd_id, osd_data_s *data) {
         return -1;
     }
     
-    memset(&mpp_chn, 0, sizeof(mpp_chn));
-    mpp_chn.enModId = RK_ID_VENC;
-    mpp_chn.s32DevId = 0;
-    mpp_chn.s32ChnId = g_venc_chn_id;
-    
-    memset(&rgn_chn_attr, 0, sizeof(rgn_chn_attr));
-    rgn_chn_attr.bShow = data->enable ? RK_TRUE : RK_FALSE;
-    rgn_chn_attr.enType = COVER_RGN;
-    rgn_chn_attr.unChnAttr.stCoverChn.stRect.s32X = data->origin_x;
-    rgn_chn_attr.unChnAttr.stCoverChn.stRect.s32Y = data->origin_y;
-    rgn_chn_attr.unChnAttr.stCoverChn.stRect.u32Width = data->width;
-    rgn_chn_attr.unChnAttr.stCoverChn.stRect.u32Height = data->height;
-    rgn_chn_attr.unChnAttr.stCoverChn.u32Color = 0x000000;  /* 黑色遮挡 */
-    rgn_chn_attr.unChnAttr.stCoverChn.u32Layer = osd_id;
-    
-    ret = RK_MPI_RGN_AttachToChn(handle, &mpp_chn, &rgn_chn_attr);
-    if (ret != RK_SUCCESS) {
-        LOG_ERROR("RK_MPI_RGN_AttachToChn COVER(%d) failed: 0x%x\n", handle, ret);
-        RK_MPI_RGN_Destroy(handle);
-        return -1;
+    /* 绑定到所有通道 */
+    for (int i = 0; i < g_venc_chn_count; i++) {
+        MPP_CHN_S mpp_chn;
+        RGN_CHN_ATTR_S rgn_chn_attr;
+        
+        memset(&mpp_chn, 0, sizeof(mpp_chn));
+        mpp_chn.enModId = RK_ID_VENC;
+        mpp_chn.s32DevId = 0;
+        mpp_chn.s32ChnId = g_venc_chn_ids[i];
+        
+        memset(&rgn_chn_attr, 0, sizeof(rgn_chn_attr));
+        rgn_chn_attr.bShow = data->enable ? RK_TRUE : RK_FALSE;
+        rgn_chn_attr.enType = COVER_RGN;
+        rgn_chn_attr.unChnAttr.stCoverChn.stRect.s32X = data->origin_x;
+        rgn_chn_attr.unChnAttr.stCoverChn.stRect.s32Y = data->origin_y;
+        rgn_chn_attr.unChnAttr.stCoverChn.stRect.u32Width = data->width;
+        rgn_chn_attr.unChnAttr.stCoverChn.stRect.u32Height = data->height;
+        rgn_chn_attr.unChnAttr.stCoverChn.u32Color = 0x000000;  /* 黑色遮挡 */
+        rgn_chn_attr.unChnAttr.stCoverChn.u32Layer = osd_id;
+        
+        ret = RK_MPI_RGN_AttachToChn(handle, &mpp_chn, &rgn_chn_attr);
+        if (ret != RK_SUCCESS) {
+            LOG_ERROR("RK_MPI_RGN_AttachToChn COVER(%d) to VENC[%d] failed: 0x%x\n", 
+                      handle, g_venc_chn_ids[i], ret);
+        }
     }
     
     return 0;
@@ -224,12 +238,10 @@ static int osd_mosaic_create_callback(int osd_id, osd_data_s *data) {
         return -1;
     }
     
-    LOG_INFO("Creating Mosaic region %d\n", osd_id);
+    LOG_INFO("Creating Mosaic region %d for %d channels\n", osd_id, g_venc_chn_count);
     
     RGN_HANDLE handle = OSD_RGN_HANDLE_BASE + osd_id;
     RGN_ATTR_S rgn_attr;
-    RGN_CHN_ATTR_S rgn_chn_attr;
-    MPP_CHN_S mpp_chn;
     int ret;
     
     memset(&rgn_attr, 0, sizeof(rgn_attr));
@@ -241,26 +253,31 @@ static int osd_mosaic_create_callback(int osd_id, osd_data_s *data) {
         return -1;
     }
     
-    memset(&mpp_chn, 0, sizeof(mpp_chn));
-    mpp_chn.enModId = RK_ID_VENC;
-    mpp_chn.s32DevId = 0;
-    mpp_chn.s32ChnId = g_venc_chn_id;
-    
-    memset(&rgn_chn_attr, 0, sizeof(rgn_chn_attr));
-    rgn_chn_attr.bShow = data->enable ? RK_TRUE : RK_FALSE;
-    rgn_chn_attr.enType = MOSAIC_RGN;
-    rgn_chn_attr.unChnAttr.stMosaicChn.stRect.s32X = data->origin_x;
-    rgn_chn_attr.unChnAttr.stMosaicChn.stRect.s32Y = data->origin_y;
-    rgn_chn_attr.unChnAttr.stMosaicChn.stRect.u32Width = data->width;
-    rgn_chn_attr.unChnAttr.stMosaicChn.stRect.u32Height = data->height;
-    rgn_chn_attr.unChnAttr.stMosaicChn.enBlkSize = MOSAIC_BLK_SIZE_16;
-    rgn_chn_attr.unChnAttr.stMosaicChn.u32Layer = osd_id;
-    
-    ret = RK_MPI_RGN_AttachToChn(handle, &mpp_chn, &rgn_chn_attr);
-    if (ret != RK_SUCCESS) {
-        LOG_ERROR("RK_MPI_RGN_AttachToChn MOSAIC(%d) failed: 0x%x\n", handle, ret);
-        RK_MPI_RGN_Destroy(handle);
-        return -1;
+    /* 绑定到所有通道 */
+    for (int i = 0; i < g_venc_chn_count; i++) {
+        MPP_CHN_S mpp_chn;
+        RGN_CHN_ATTR_S rgn_chn_attr;
+        
+        memset(&mpp_chn, 0, sizeof(mpp_chn));
+        mpp_chn.enModId = RK_ID_VENC;
+        mpp_chn.s32DevId = 0;
+        mpp_chn.s32ChnId = g_venc_chn_ids[i];
+        
+        memset(&rgn_chn_attr, 0, sizeof(rgn_chn_attr));
+        rgn_chn_attr.bShow = data->enable ? RK_TRUE : RK_FALSE;
+        rgn_chn_attr.enType = MOSAIC_RGN;
+        rgn_chn_attr.unChnAttr.stMosaicChn.stRect.s32X = data->origin_x;
+        rgn_chn_attr.unChnAttr.stMosaicChn.stRect.s32Y = data->origin_y;
+        rgn_chn_attr.unChnAttr.stMosaicChn.stRect.u32Width = data->width;
+        rgn_chn_attr.unChnAttr.stMosaicChn.stRect.u32Height = data->height;
+        rgn_chn_attr.unChnAttr.stMosaicChn.enBlkSize = MOSAIC_BLK_SIZE_16;
+        rgn_chn_attr.unChnAttr.stMosaicChn.u32Layer = osd_id;
+        
+        ret = RK_MPI_RGN_AttachToChn(handle, &mpp_chn, &rgn_chn_attr);
+        if (ret != RK_SUCCESS) {
+            LOG_ERROR("RK_MPI_RGN_AttachToChn MOSAIC(%d) to VENC[%d] failed: 0x%x\n", 
+                      handle, g_venc_chn_ids[i], ret);
+        }
     }
     
     return 0;
@@ -277,15 +294,26 @@ static int osd_mosaic_destroy_callback(int osd_id) {
  *                              外部接口实现
  * ========================================================================= */
 
-int video_osd_init(int venc_chn_id) {
+int video_osd_init(const int *venc_chn_ids, int chn_count) {
     if (g_osd_initialized) {
         LOG_WARN("OSD already initialized\n");
         return 0;
     }
     
-    LOG_INFO("Initializing video OSD for VENC[%d]\n", venc_chn_id);
+    if (!venc_chn_ids || chn_count <= 0 || chn_count > VIDEO_OSD_MAX_CHN) {
+        LOG_ERROR("Invalid OSD init params: chn_count=%d\n", chn_count);
+        return -1;
+    }
     
-    g_venc_chn_id = venc_chn_id;
+    LOG_INFO("Initializing video OSD for %d VENC channels: ", chn_count);
+    
+    /* 记录通道列表 */
+    g_venc_chn_count = chn_count;
+    for (int i = 0; i < chn_count; i++) {
+        g_venc_chn_ids[i] = venc_chn_ids[i];
+        LOG_INFO(" [%d]", g_venc_chn_ids[i]);
+    }
+    LOG_INFO("\n");
     
     /* 注册 OSD 回调函数 */
     rk_osd_bmp_create_callback_register(osd_bmp_create_callback);
@@ -304,7 +332,7 @@ int video_osd_init(int venc_chn_id) {
     }
     
     g_osd_initialized = 1;
-    LOG_INFO("Video OSD initialized successfully\n");
+    LOG_INFO("Video OSD initialized successfully for %d channels\n", chn_count);
     
     return 0;
 }
@@ -318,6 +346,7 @@ int video_osd_deinit(void) {
     
     rk_osd_deinit();
     
+    g_venc_chn_count = 0;
     g_osd_initialized = 0;
     return 0;
 }

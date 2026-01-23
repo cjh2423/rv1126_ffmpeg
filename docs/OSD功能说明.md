@@ -94,8 +94,12 @@ OSD 模块已封装在 `video_osd.h` 中，初始化极为简单：
 ```c
 #include "video_osd.h"
 
-// 在 VENC 通道创建后调用
-video_osd_init(venc_chn_id);
+// 收集所有活跃的 VENC 通道 ID
+int chns[] = {0, 1}; // 例如主流和子流
+int count = 2;
+
+// 初始化 OSD 模块 (同时叠加到多个通道)
+video_osd_init(chns, count);
 ```
 
 ### 部署要求
