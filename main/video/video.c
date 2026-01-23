@@ -31,6 +31,7 @@
 #include "log.h"
 #include "param.h"
 #include "frame_queue.h"
+#include "rga_utils.h"
 #if APP_Test_RTSP
 #include "rtsp.h"
 #endif
@@ -594,7 +595,10 @@ int rk_video_init(void) {
     cfgs[1] = NULL;
 #endif
 
-    // 1. 初始化 VI 硬件 (以主流参数为准)
+    // 1. 初始化 RGA 硬件加速
+    rga_utils_init();
+
+    // 2. 初始化 VI 硬件 (以主流参数为准)
     g_vi_chn.enModId = RK_ID_VI;
     g_vi_chn.s32DevId = cfgs[0]->vi_dev_id;
     g_vi_chn.s32ChnId = cfgs[0]->vi_chn_id;
@@ -605,7 +609,7 @@ int rk_video_init(void) {
     if (ret) return ret;
 
 #if APP_Test_RTSP
-    // 2. 初始化 RTSP Server
+    // 3. 初始化 RTSP Server
     const char *url0 = (cfgs[0] && cfgs[0]->enable_rtsp) ? cfgs[0]->rtsp_url : NULL;
     const char *url1 = (APP_MAX_STREAMS > 1 && cfgs[1] && cfgs[1]->enable_rtsp) ? cfgs[1]->rtsp_url : NULL;
     
@@ -619,7 +623,7 @@ int rk_video_init(void) {
     g_video_run = 1;
     memset(g_stream_ctx, 0, sizeof(g_stream_ctx));
 
-    // 3. 动态初始化各路流
+    // 4. 动态初始化各路流
     for (int i = 0; i < APP_MAX_STREAMS; i++) {
         if (!cfgs[i]) continue;
         
@@ -667,6 +671,9 @@ int rk_video_deinit(void) {
     // 4. 禁用并关闭 VI 通道与设备
     RK_MPI_VI_DisableChn(cfg->vi_pipe_id, cfg->vi_chn_id);
     RK_MPI_VI_DisableDev(cfg->vi_dev_id);
+
+    // 5. 释放 RGA 资源
+    rga_utils_deinit();
 
     LOG_INFO("=== Video subsystem deinitialized ===\n");
     return 0;

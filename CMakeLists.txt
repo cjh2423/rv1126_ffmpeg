@@ -53,6 +53,7 @@ include_directories(
     ${MEDIA_DIR}/include/rkaiq/xcore
     ${MEDIA_DIR}/include/rkaiq/iq_parser
     ${MEDIA_DIR}/include/rkaiq/ipc_server
+    ${MEDIA_DIR}/include/rga
     ${FFMPEG_DIR}/include
 )
 
