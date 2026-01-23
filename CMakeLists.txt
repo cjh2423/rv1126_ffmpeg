@@ -3,13 +3,9 @@ cmake_minimum_required(VERSION 3.10)
 # ============================================================
 # 交叉编译工具链配置
 # ============================================================
-# sdk外的
+# sdk外的交叉编译工具链(确保项目的可移植性)
 set(CMAKE_C_COMPILER "/home/u22/toolchain/arm-rockchip830-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc")
 set(CMAKE_CXX_COMPILER "/home/u22/toolchain/arm-rockchip830-linux-gnueabihf/bin/arm-linux-gnueabihf-g++")
-
-# sdk中的
-#set(CMAKE_C_COMPILER "/home/u22/sdk/rv1126_ipc_linux_release/tools/linux/toolchain/arm-rockchip830-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc")
-#set(CMAKE_CXX_COMPILER "/home/u22/sdk/rv1126_ipc_linux_release/tools/linux/toolchain/arm-rockchip830-linux-gnueabihf/bin/arm-linux-gnueabihf-g++")
 
 # ============================================================
 # 项目定义
@@ -33,7 +29,7 @@ add_definitions(-DISP_HW_V20)
 set(MEDIA_DIR ${PROJECT_SOURCE_DIR}/3rdparty/media)
 set(FFMPEG_DIR ${PROJECT_SOURCE_DIR}/3rdparty/ffmpeg_install)
 set(FREETYPE_DIR ${PROJECT_SOURCE_DIR}/3rdparty/freetype)
-set(ALSA_DIR "/home/u22/sdk/rv1126_ipc_linux_release/output/out/media_out/root/usr/lib")
+set(ALSA_DIR ${PROJECT_SOURCE_DIR}/3rdparty/alsa/lib)
 
 include_directories(
     ${PROJECT_SOURCE_DIR}/common

@@ -19,6 +19,9 @@
 │   ├── include/            # FreeType 头文件 (ft2build.h 等)
 │   └── lib/                # libfreetype.a 静态库
 │
+├── alsa/                   # 音频处理库
+│   └── lib/                # libasound.so (音频采集/播放)
+│
 └── ffmpeg_install/         # FFmpeg 多媒体框架 (用于推流/封装)
     ├── include/            # FFmpeg 头文件 (libavcodec, libavformat 等)
     └── lib/                # FFmpeg 静态库/动态库
@@ -46,7 +49,13 @@
 | :--- | :--- |
 | `libfreetype.a` | 开源矢量字体引擎，用于解析 TrueType (.ttf) 字体并生成位图以叠加到视频上。 |
 
-### 3. 多媒体框架 (`3rdparty/ffmpeg_install/lib`)
+### 3. 音频处理库 (`3rdparty/alsa/lib`)
+
+| 库文件 | 说明 |
+| :--- | :--- |
+| `libasound.so` | ALSA (Advanced Linux Sound Architecture) 核心库，用于音频采集与播放。 |
+
+### 4. 多媒体框架 (`3rdparty/ffmpeg_install/lib`)
 
 | 库文件 | 说明 |
 | :--- | :--- |
