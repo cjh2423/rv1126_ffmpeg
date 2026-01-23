@@ -47,6 +47,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/main
     ${PROJECT_SOURCE_DIR}/main/video
     ${PROJECT_SOURCE_DIR}/main/config
+    ${PROJECT_SOURCE_DIR}/main/monitor
     ${MEDIA_DIR}/include
     ${MEDIA_DIR}/include/rkaiq
     ${MEDIA_DIR}/include/rkaiq/uAPI
@@ -88,6 +89,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/common/rtsp SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/rtmp SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/sysutil SRCS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/common/osd SRCS)
+aux_source_directory(${PROJECT_SOURCE_DIR}/main/monitor SRCS)
 
 # ============================================================
 # 可执行文件

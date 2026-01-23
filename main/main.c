@@ -2,11 +2,15 @@
 #include <rk_mpi_sys.h>
 
 #include "common.h"
+#include "config.h"
 #include "isp.h"
 #include "log.h"
 #include "param.h"
 #include "system.h"
 #include "video.h"
+#if APP_Test_PERF_MONITOR
+#include "perf_monitor.h"
+#endif
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -103,6 +107,10 @@ int main(int argc, char **argv) {
 	rk_isp_set_frame_rate(0, rk_param_get_int("isp.0.adjustment:fps", 30));
 	RK_MPI_SYS_Init();
 	rk_video_init();
+#if APP_Test_PERF_MONITOR
+	perf_monitor_init();
+	perf_monitor_start(10);  // 每 10 秒打印一次性能报告
+#endif
 	LOG_INFO("rkipc init finished.\n");
 
 	// 循环等待退出信号。
@@ -111,6 +119,9 @@ int main(int argc, char **argv) {
 	}
 
 	// 反初始化顺序：video -> mpi -> isp -> system -> param。
+#if APP_Test_PERF_MONITOR
+	perf_monitor_deinit();
+#endif
 	rk_system_deinit();
 	rk_video_deinit(); // RK_MPI_SYS_Exit
 	RK_MPI_SYS_Exit();

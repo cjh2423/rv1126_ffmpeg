@@ -41,6 +41,10 @@
 #if APP_Test_OSD
 #include "video_osd.h"
 #endif
+#if APP_Test_PERF_MONITOR
+#include "perf_monitor.h"
+#include "common.h" // rkipc_get_curren_time_ms
+#endif
 
 #include <pthread.h>
 #include <stdio.h>
@@ -145,6 +149,13 @@ static void *venc_encode_thread(void *arg) {
     VideoStreamContext *ctx = (VideoStreamContext *)arg;
     const VideoConfig *cfg = ctx->cfg;
     
+#if APP_Test_PERF_MONITOR
+    // 性能监控变量
+    uint64_t last_stat_time = 0;
+    int frame_count = 0;
+    uint64_t total_bytes = 0;
+#endif
+
     LOG_INFO("[VENC-%d] Encode thread started\n", cfg->venc_chn_id);
     
     VENC_STREAM_S stStream;
@@ -168,6 +179,29 @@ static void *venc_encode_thread(void *arg) {
         
         void *data = RK_MPI_MB_Handle2VirAddr(stStream.pstPack->pMbBlk);
         size_t len = stStream.pstPack->u32Len;
+        
+#if APP_Test_PERF_MONITOR
+        // 仅在主码流 (chn 0) 进行统计
+        if (cfg->venc_chn_id == 0) {
+            uint64_t now = (uint64_t)rkipc_get_curren_time_ms();
+            if (last_stat_time == 0) last_stat_time = now;
+            
+            frame_count++;
+            total_bytes += len;
+            
+            if (now - last_stat_time >= 1000) {
+                float fps = (float)frame_count * 1000.0f / (float)(now - last_stat_time);
+                uint32_t bitrate_kbps = (uint32_t)(total_bytes * 8 / 1000);
+                
+                // 暂时假设 VI 帧率与 FPS 相近 (实际应从 VI 线程获取)
+                perf_update_video_stats(fps, fps, bitrate_kbps);
+                
+                last_stat_time = now;
+                frame_count = 0;
+                total_bytes = 0;
+            }
+        }
+#endif
         
         if (data && len > 0) {
             // 封装编码帧
